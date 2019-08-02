@@ -26,7 +26,7 @@ namespace llvm {
 
 template<class BlockT, class GraphNodeT,  class GenInfoT>
 std::vector<BlockT *>
-FlowAwarePostOrder(const GraphNodeT &G, const GenInfoT &GI);
+FlowAwarePostOrderVect(const GraphNodeT &G, const GenInfoT &GI);
 
 // A wrapper function for templated function
 std::vector<BasicBlock *> FlowAwarePostOrder(const DomTreeNodeBase<BasicBlock> *G,
