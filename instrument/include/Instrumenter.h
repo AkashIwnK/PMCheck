@@ -37,9 +37,10 @@ public:
 		//initializeModelVerififierWrapperPassPass(
 			//					*PassRegistry::getPassRegistry());
 		//initializeInstrumentationPassPass(*PassRegistry::getPassRegistry());
-		initializeGenCondBlockSetLoopInfoWrapperPassPass(
-										*PassRegistry::getPassRegistry());
+		initializeGenCondBlockSetLoopInfoWrapperPassPass(*PassRegistry::getPassRegistry());
+		errs() << "INITIALIZING MODEL VERIFIER WRAPPER PASS\n";
 		initializeModelVerifierWrapperPassPass(*PassRegistry::getPassRegistry());
+		errs() << "MODEL VERIFIER WRAPPER PASS INITIALIZED\n";
 	}
 
 	bool runOnFunction(Function &F) override;
@@ -47,6 +48,7 @@ public:
 	void getAnalysisUsage(AnalysisUsage &AU) const {
 		AU.addRequired<DominatorTreeWrapperPass>();
 		AU.addRequired<GenCondBlockSetLoopInfoWrapperPass>();
+		AU.addRequired<ModelVerifierWrapperPass>();
 		//AU.addRequired<CFLSteensAAWrapperPass>();
 		//AU.addRequired<CFLAndersAAWrapperPass>();
 		//AU.addRequired<SCEVAAWrapperPass>();
@@ -54,14 +56,15 @@ public:
 		//AU.addRequired<ObjCARCAAWrapperPass>();
 		//AU.addRequired<TypeBasedAAWrapperPass>();
 		//AU.addRequired<ScopedNoAliasAAWrapperPass>();
-		AU.addRequired<BasicAAWrapperPass>();
-		AU.addRequired<AAResultsWrapperPass>();
+		//AU.addRequired<BasicAAWrapperPass>();
+		//AU.addRequired<AAResultsWrapperPass>();
 		//AU.addRequired<ModelVerifierWrapperPass>();
-		//AU.setPreservesCFG();
-		//AU.setPreservesAll();
+		AU.addRequired<AAResultsWrapperPass>();
+		AU.setPreservesCFG();
+		AU.setPreservesAll();
 	}
 
-	bool doInitialization(Module &);
+	bool doInitialization(Module &M);
 
 	bool doFinalization(Module &);
 };
