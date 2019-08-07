@@ -19,6 +19,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 
 #include "CondBlockBase.h"
 #include "CondBlockBaseImpl.h"
@@ -245,6 +246,88 @@ static void SeparateAcrossLoopsAndCondBlockSets(SCCToInstsPairVectTy &SCCToInsts
 	}
 }
 
+static bool IsValidLibMemoryOperation(const FunctionType &FTy, LibFunc F,
+																			const DataLayout &DL) {
+	auto &Ctx = FTy.getContext();
+	auto *PCharTy = Type::getInt8PtrTy(Ctx);
+	Type *SizeTTy = DL.getIntPtrType(Ctx, 0);
+	auto IsSizeTTy = [SizeTTy](Type *Ty) {
+		return SizeTTy ? Ty == SizeTTy : Ty->isIntegerTy();
+	};
+	unsigned NumParams = FTy.getNumParams();
+
+// Look for specific library calls performing memory operations
+	switch(F) {
+		case LibFunc_strcat:
+	    return (NumParams == 2 && FTy.getReturnType()->isPointerTy() &&
+	            FTy.getParamType(0) == FTy.getReturnType() &&
+	            FTy.getParamType(1) == FTy.getReturnType());
+
+	  case LibFunc_strncat:
+	  	return (NumParams == 3 && FTy.getReturnType()->isPointerTy() &&
+	            FTy.getParamType(0) == FTy.getReturnType() &&
+	            FTy.getParamType(1) == FTy.getReturnType() &&
+	            IsSizeTTy(FTy.getParamType(2)));
+
+	  case LibFunc_strcpy_chk:
+	  case LibFunc_stpcpy_chk:
+	    --NumParams;
+	    if (!IsSizeTTy(FTy.getParamType(NumParams)))
+	      return false;
+
+	  case LibFunc_strcpy:
+		case LibFunc_stpcpy:
+	    return (NumParams == 2 && FTy.getReturnType() == FTy.getParamType(0) &&
+	            FTy.getParamType(0) == FTy.getParamType(1) &&
+	            FTy.getParamType(0) == PCharTy);
+
+	  case LibFunc_strncpy_chk:
+	  case LibFunc_stpncpy_chk:
+	    --NumParams;
+	    if (!IsSizeTTy(FTy.getParamType(NumParams)))
+	      return false;
+
+	  case LibFunc_strncpy:
+	  case LibFunc_stpncpy:
+	  	return (NumParams == 3 && FTy.getReturnType() == FTy.getParamType(0) &&
+	            FTy.getParamType(0) == FTy.getParamType(1) &&
+	            FTy.getParamType(0) == PCharTy &&
+	            IsSizeTTy(FTy.getParamType(2)));
+
+		case LibFunc_memcpy_chk:
+		case LibFunc_memmove_chk:
+			--NumParams;
+			if (!IsSizeTTy(FTy.getParamType(NumParams)))
+				return false;
+
+		case LibFunc_memcpy:
+		case LibFunc_mempcpy:
+		case LibFunc_memmove:
+			return (NumParams == 3 && FTy.getReturnType() == FTy.getParamType(0) &&
+							FTy.getParamType(0)->isPointerTy() &&
+							FTy.getParamType(1)->isPointerTy() &&
+							IsSizeTTy(FTy.getParamType(2)));
+
+		case LibFunc_memset_chk:
+			--NumParams;
+			if (!IsSizeTTy(FTy.getParamType(NumParams)))
+				return false;
+
+		case LibFunc_memset:
+			return (NumParams == 3 && FTy.getReturnType() == FTy.getParamType(0) &&
+							FTy.getParamType(0)->isPointerTy() &&
+							FTy.getParamType(1)->isIntegerTy() &&
+							IsSizeTTy(FTy.getParamType(2)));
+
+		case LibFunc_memccpy:
+			return (NumParams >= 2 && FTy.getParamType(1)->isPointerTy());
+
+		default:
+			return false;
+	}
+	return true;
+}
+
 static void
 IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop,
 												 SerialInstsSet<> &SW, SerialInstsSet<> &SF,
@@ -256,7 +339,7 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 												 std::vector<Instruction *> &FencesVect,
 												 DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
 												 SmallVector<Value *, 16> &StackAndGlobalVarVect,
-												 AAResults &AA, bool StrictModel) {
+												 AAResults &AA, TargetLibraryInfo &TLI, bool StrictModel) {
 // Get all relevant interfaces
 	auto &FI = PMI.getFlushInterface();
 	auto &MI = PMI.getMsyncInterface();
@@ -294,6 +377,20 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 			if(dyn_cast<IntrinsicInst>(CI)
 			&& !dyn_cast<AnyMemIntrinsic>(CI)) {
 				continue;
+			}
+
+		// Ignore most of the target library calls
+			if(auto *Callee = CI->getCalledFunction()) {
+				LibFunc TLIFn;
+				if(TLI.getLibFunc(*Callee, TLIFn)) {
+					const DataLayout &DL = Callee->getParent()->getDataLayout();
+					if(!IsValidLibMemoryOperation(*(Callee->getFunctionType()), TLIFn, DL)) {
+					// The library call is not a valid library call writing to memory,
+					// so skip it.
+						errs() << "NOT VALID LIB MEMORY OPERATION\n";
+						continue;
+					}
+				}
 			}
 
 		// Check if it is a fairly huge memory operation when strict persistency
@@ -405,7 +502,8 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 }
 
 static void GroupSerialInstsInSCC(Function *F,  GenCondBlockSetLoopInfo &GI,
-																  DominatorTree &DT, AAResults &AA, PMInterfaces<> &PMI,
+																  DominatorTree &DT, AAResults &AA,
+																	TargetLibraryInfo &TLI, PMInterfaces<> &PMI,
 																  SCCToInstsPairVectTy &SCCToWritesPairVect,
 																  SCCToInstsPairVectTy &SCCToFlushesPairVect,
 																  SCCToInstsPairVectTy &FenceFreeSCCToWritesPairVect,
@@ -416,6 +514,8 @@ static void GroupSerialInstsInSCC(Function *F,  GenCondBlockSetLoopInfo &GI,
 																  DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
 																  SmallVector<Value *, 16> &StackAndGlobalVarVect,
 																	bool StrictModel = false) {
+	errs() << "FUNCTION NAME: " << F->getName() << "\n";
+	errs() << "GROUPING SERIAL INSTRUCTIONS IN SCC\n";
 // Iterate over all the SCCs
 	errs() << "SCC ITERATOR ALL READY\n";
 	for(SCC_Iterator<Function *> SCCIterator = SCC_Iterator<Function *>::begin(F);
@@ -435,7 +535,7 @@ static void GroupSerialInstsInSCC(Function *F,  GenCondBlockSetLoopInfo &GI,
 									 SW, SF, PMI, SCCIterator, SCCToWritesPairVect,
 									 SCCToFlushesPairVect, BBWithFirstSerialWrites,
 									 BBWithFirstSerialFlushes, FencesVect, BlockToSCCMap,
-									 StackAndGlobalVarVect, AA, StrictModel);
+									 StackAndGlobalVarVect, AA, TLI, StrictModel);
 		} else {
 			const DomTreeNodeBase<BasicBlock> *DomRoot =
 							 DT.getNode((*SCCIterator)[(*SCCIterator).size() - 1]);
@@ -453,7 +553,7 @@ static void GroupSerialInstsInSCC(Function *F,  GenCondBlockSetLoopInfo &GI,
 										 SW, SF, PMI, SCCIterator, SCCToWritesPairVect,
 										 SCCToFlushesPairVect, BBWithFirstSerialWrites,
 										 BBWithFirstSerialFlushes, FencesVect, BlockToSCCMap,
-										 StackAndGlobalVarVect, AA, StrictModel);
+										 StackAndGlobalVarVect, AA, TLI, StrictModel);
 			}
 		}
 
@@ -483,9 +583,13 @@ static void GroupSerialInstsInSCC(Function *F,  GenCondBlockSetLoopInfo &GI,
 	}
 }
 
-static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &GI, AAResults &AA,
-										 PMInterfaces<> &PMI, TempPersistencyRecord<> &TPR,
-										 SmallVector<Value *, 16> &StackAndGlobalVarVect) {
+static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &GI,
+																				 AAResults &AA, TargetLibraryInfo &TLI,
+																				 PMInterfaces<> &PMI,
+																				 TempPersistencyRecord<> &TPR,
+										 									 	 SmallVector<Value *, 16> &StackAndGlobalVarVect) {
+	errs() << "GET GLOBALS AND STACK VARIABLES\n";
+	errs() << "FUNCTION NAME: " << F->getName() << "\n";
 // Get interfaces
 	auto &FI = PMI.getFlushInterface();
 	auto &MI = PMI.getMsyncInterface();
@@ -555,6 +659,20 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 				if(dyn_cast<IntrinsicInst>(CI)
 				&& !dyn_cast<AnyMemIntrinsic>(CI)) {
 					continue;
+				}
+
+			// Ignore most of the target library calls
+				if(auto *Callee = CI->getCalledFunction()) {
+					LibFunc TLIFn;
+					if(TLI.getLibFunc(*Callee, TLIFn)) {
+						const DataLayout &DL = Callee->getParent()->getDataLayout();
+						if(!IsValidLibMemoryOperation(*(Callee->getFunctionType()), TLIFn, DL)) {
+						// The library call is not a valid library call writing to memory,
+						// so skip it.
+							errs() << "NOT VALID LIB MEMORY OPERATION\n";
+							continue;
+						}
+					}
 				}
 
 			// Pure fence
@@ -651,6 +769,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 
 static void PopulateSerialInstsInfo(Function *F, GenCondBlockSetLoopInfo &GI,
 																  	DominatorTree &DT, AAResults &AA,
+																		TargetLibraryInfo &TLI,
 																		std::vector<Instruction *> FencesVect,
 																		PMInterfaces<> &PMI,
 																		PerfCheckerInfo<> &WritePCI,
@@ -668,11 +787,11 @@ static void PopulateSerialInstsInfo(Function *F, GenCondBlockSetLoopInfo &GI,
 	bool StrictModel = false;
 
 // Get the globals and stack variables
-	GetGlobalsAndStackVarsAndTPR(F, GI, AA, PMI, TPR, StackAndGlobalVarVect);
+	GetGlobalsAndStackVarsAndTPR(F, GI, AA, TLI, PMI, TPR, StackAndGlobalVarVect);
 
 // Now we need to iterate over the strongly connected components in
 // order to clump up the consecutive instructions together.
-	GroupSerialInstsInSCC(F, GI, DT, AA, PMI, SCCToWritesPairVect,
+	GroupSerialInstsInSCC(F, GI, DT, AA, TLI, PMI, SCCToWritesPairVect,
 						  SCCToFlushesPairVect, FenceFreeSCCToWritesPairVect,
 						  FenceFreeSCCToFlushesPairVect, BBWithFirstSerialWrites,
 						  BBWithFirstSerialFlushes, FencesVect,
@@ -810,10 +929,10 @@ static void PopulateSerialInstsInfo(Function *F, GenCondBlockSetLoopInfo &GI,
 
 // Initialze the the wrapper pass
 char ModelVerifierWrapperPass::ID = 0;
-char ModelVerififierPass::ID = 0;
+char ModelVerifierPass::ID = 0;
 
 // Register the pass for the opt tool
-static RegisterPass<ModelVerififierPass> PassObj("ModelCheck",
+static RegisterPass<ModelVerifierPass> PassObj("ModelCheck",
 																								 "Perform Check on Insts");
 
 INITIALIZE_PASS_BEGIN(ModelVerifierWrapperPass, "redundant-persist instructions-check",
@@ -827,32 +946,34 @@ bool ModelVerifierWrapperPass::runOnFunction(Function &F) {
 	if(!F.size())
 		return false;
 
-	errs() << "WORKING\n";
+	errs() << "--WORKING\n";
 	auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 	auto &GI =
 		getAnalysis<GenCondBlockSetLoopInfoWrapperPass>().getGenCondInfoWrapperPassInfo();
 
 	auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
+	auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 
-	PopulateSerialInstsInfo(&F, GI, DT, AA, FencesVect, PMI,  WritePCI, FlushPCI);
+	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, FencesVect, PMI,  WritePCI, FlushPCI);
 	WritePCI.printFuncToSerialInstsSetMap();
 	FlushPCI.printFuncToSerialInstsSetMap();
 
 	return false;
 }
 
-bool ModelVerififierPass::runOnFunction(Function &F) {
+bool ModelVerifierPass::runOnFunction(Function &F) {
 	if(!F.size())
 		return false;
 
-	errs() << "WORKING\n";
+	errs() << "MODEL WORKING\n";
 	auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 	auto &GI =
 		getAnalysis<GenCondBlockSetLoopInfoWrapperPass>().getGenCondInfoWrapperPassInfo();
 
 	auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
+	auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 
-	PopulateSerialInstsInfo(&F, GI, DT, AA, FencesVect, PMI,  WritePCI, FlushPCI);
+	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, FencesVect, PMI,  WritePCI, FlushPCI);
 	WritePCI.printFuncToSerialInstsSetMap();
 	FlushPCI.printFuncToSerialInstsSetMap();
 
