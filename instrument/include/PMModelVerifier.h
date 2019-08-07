@@ -7,6 +7,7 @@
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 
 #include <vector>
 
@@ -56,7 +57,7 @@ void TempPersistencyRecord<T>::printRecord() const {
 	};
 
 // Make sure that the stores and flushes pair exist
-	errs() << "+++++++++++++++++ PRINTING REDUNDANT PERSIST OPERATIONS ++++++++++++++++\n";
+	errs() << "+++++++++++++ PRINTING REDUNDANT PERSIST OPERATIONS +++++++++++++\n";
 	for(auto &Pair : PairVect) {
 		auto &SW  = std::get<0>(Pair);
 		auto &SF  = std::get<1>(Pair);
@@ -76,12 +77,14 @@ void TempPersistencyRecord<T>::printRecord() const {
 				I->print(errs());
 				errs() << "does not have a flush to go with it.\n";
 			}
+			continue;
 		}
-		continue;
 	}
+	errs() << "++++++++++++++ REDUNDANT PERSIST OPERATIONS PRINTED +++++++++++++++\n";
+
 
 // Print the redundant flushes
-	errs() << "--------------------- PRINTING REDUNDANT FENCES RECORD ------------------\n";
+	errs() << "--------------- PRINTING REDUNDANT FENCES RECORD ---------------\n";
 	for(auto &SF : RedFencesVectVect) {
 		errs() << "Fence at: ";
 		for(auto *I : SF) {
@@ -90,15 +93,16 @@ void TempPersistencyRecord<T>::printRecord() const {
 			errs() << "is redundant.\n";
 		}
 	}
+	errs() << "------------------ REDUNDANT FENCES RECORDED-------------------\n";
 }
 
 //--------------------------------------------------------------------------------------//
 // Passes for the getting flush sets
 //--------------------------------------------------------------------------------------//
 
-void initializeModelVerififierPassPass(PassRegistry &);
+void initializeModelVerifierPassPass(PassRegistry &);
 
-class ModelVerififierPass : public FunctionPass {
+class ModelVerifierPass : public FunctionPass {
 	PerfCheckerInfo<> WritePCI;
 	PerfCheckerInfo<> FlushPCI;
 	PMInterfaces<> PMI;
@@ -107,9 +111,9 @@ class ModelVerififierPass : public FunctionPass {
 public:
 	static char ID;
 
-	ModelVerififierPass() : FunctionPass(ID) {
-		//initializeModelVerififierWrapperPassPass(
-				//					*PassRegistry::getPassRegistry());
+	ModelVerifierPass() : FunctionPass(ID) {
+		//initializeModelVerifierWrapperPassPass(
+			//						*PassRegistry::getPassRegistry());
 		initializeGenCondBlockSetLoopInfoWrapperPassPass(
 									*PassRegistry::getPassRegistry());
 	}
@@ -119,6 +123,7 @@ public:
 	void getAnalysisUsage(AnalysisUsage &AU) const {
 		AU.addRequired<DominatorTreeWrapperPass>();
 		AU.addRequired<GenCondBlockSetLoopInfoWrapperPass>();
+		AU.addRequired<TargetLibraryInfoWrapperPass>();
 		/*
 		AU.addRequired<CFLSteensAAWrapperPass>();
 		AU.addRequired<CFLAndersAAWrapperPass>();
@@ -156,10 +161,11 @@ public:
 	static char ID;
 
 	ModelVerifierWrapperPass() : FunctionPass(ID) {
-		//initializeModelVerififierWrapperPassPass(
-				//					*PassRegistry::getPassRegistry());
-		initializeGenCondBlockSetLoopInfoWrapperPassPass(
+		errs() << "	MODEL VERIFIER WRAPPER PASS CONSTRUCTOR\n";
+		initializeGenCondBlockSetLoopInfoWrapperPassPass(*PassRegistry::getPassRegistry());
+		initializeModelVerifierWrapperPassPass(
 									*PassRegistry::getPassRegistry());
+			errs() << "	MODEL VERIFIER WRAPPER PASS CONSTRUCTOR END\n";
 	}
 
 	bool runOnFunction(Function &F) override;
@@ -167,6 +173,7 @@ public:
 	void getAnalysisUsage(AnalysisUsage &AU) const {
 		AU.addRequired<DominatorTreeWrapperPass>();
 		AU.addRequired<GenCondBlockSetLoopInfoWrapperPass>();
+		AU.addRequired<TargetLibraryInfoWrapperPass>();
 		/*
 		AU.addRequired<CFLSteensAAWrapperPass>();
 		AU.addRequired<CFLAndersAAWrapperPass>();
