@@ -21,7 +21,7 @@
 #include "SCC_Iterator.h"
 #include "InstsSet.h"
 
-namespace llvm {
+//namespace llvm {
 
 typedef std::pair<SCC_Iterator<Function *>, SerialInstsSet<>> SCCToInstsPairTy;
 typedef SmallVector<SCCToInstsPairTy, 16> SCCToInstsPairVectTy;
@@ -44,6 +44,6 @@ void SeparateAcrossSCCsAndCondBlockSets(
 					DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
 					GenCondBlockSetLoopInfo &GI);
 
-}  // end of namespace llvm
+//}  // end of namespace llvm
 
 #endif  // COMMON_SCC_OPS_H_
