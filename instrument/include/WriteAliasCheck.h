@@ -19,12 +19,12 @@
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 
-namespace llvm {
+//namespace llvm {
 
 bool WriteAliases(Instruction *Write, SmallVector<Value *, 16> &StackAndGlobalVarVect,
 		   	   	   AAResults &AA);
 
-}  // end of namespace llvm
+//}  // end of namespace llvm
 
 #endif // PM_WRITE_ALIAS_CHECK_H__
 
