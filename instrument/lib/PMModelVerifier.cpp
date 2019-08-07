@@ -328,6 +328,24 @@ static bool IsValidLibMemoryOperation(const FunctionType &FTy, LibFunc F,
 	return true;
 }
 
+static bool CalleeIsTerminatesProgram(Function *Callee) {
+	bool PotentiallyTermFuncCall = false;
+	for(auto &CallAttrSet : Callee->getAttributes()) {
+		for(auto &Attr : CallAttrSet) {
+			if(Attr.hasAttribute(Attribute::NoReturn)
+			|| Attr.hasAttribute(Attribute::NoUnwind)) {
+				if(!PotentiallyTermFuncCall) {
+					PotentiallyTermFuncCall = true;
+				} else {
+				// This is a function call that terminates program. Ignore it.
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
 static void
 IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop,
 												 SerialInstsSet<> &SW, SerialInstsSet<> &SF,
@@ -371,18 +389,25 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 		if(CallInst *CI = dyn_cast<CallInst>(Inst)) {
 			Inst->print(errs());
 			std::cout << "\n";
-			errs() << CI->getCalledFunction()->getName() << "\n";
-
-		// Ignore the instrinsics that are not writing to memory
-			if(dyn_cast<IntrinsicInst>(CI)
-			&& !dyn_cast<AnyMemIntrinsic>(CI)) {
-				continue;
-			}
 
 		// Ignore most of the target library calls
 			if(auto *Callee = CI->getCalledFunction()) {
+				errs() << CI->getCalledFunction()->getName() << "\n";
+
+			// If it is a funtion that potentially terminates the application by
+			// not returning, we need to ignore this function. Example "exit()"
+				errs() << "TEST FOR EXIT\n";
+				if(CalleeIsTerminatesProgram(Callee)) {
+					errs() << "EXIT FOUND\n";
+					continue;
+				}
+
+				errs() << "FUNCTION CALL NOT CALLING EXIT\n";
+
+				errs() << "CHECKING IF IT IS A LIBRARY FUNCTION CALL\n";
 				LibFunc TLIFn;
 				if(TLI.getLibFunc(*Callee, TLIFn)) {
+					errs() << "LIBRARY FUNCTION CALL\n";
 					const DataLayout &DL = Callee->getParent()->getDataLayout();
 					if(!IsValidLibMemoryOperation(*(Callee->getFunctionType()), TLIFn, DL)) {
 					// The library call is not a valid library call writing to memory,
@@ -390,8 +415,39 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 						errs() << "NOT VALID LIB MEMORY OPERATION\n";
 						continue;
 					}
+				} else {
+					errs() << "NOT A LIBRARY FUNCTION CALL\n";
 				}
+			} else {
+			// We do not recognize this function since it seems to be an indirect call.
+			// Better to commit the persist operations. This call can be treated like
+			// a pure fence in this situation since we can only be safely conservative.
+				errs() << "CALLED FUNCTION IS NULL\n";
+				if(SW.size()) {
+					auto Pair = std::make_pair(SCCIterator, SW);
+					SCCToWritesPairVect.push_back(Pair);
+					SW.clear();
+					if(!InterveningFence && !SCCIterator.hasLoop())
+						BBWithFirstSerialWrites.push_back(BB);
+				}
+				if(SF.size()) {
+					auto Pair = std::make_pair(SCCIterator, SF);
+					SCCToFlushesPairVect.push_back(Pair);
+					SF.clear();
+					if(!InterveningFence && !SCCIterator.hasLoop())
+						BBWithFirstSerialFlushes.push_back(BB);
+				}
+				FenceStop = true;
+				InterveningFence = true;
+				continue;
 			}
+
+		// Ignore the instrinsics that are not writing to memory
+			if(dyn_cast<IntrinsicInst>(CI)
+			&& !dyn_cast<AnyMemIntrinsic>(CI)) {
+				continue;
+			}
+			errs() << "NOT A NON-MEMORY INTRINSIC\n";
 
 		// Check if it is a fairly huge memory operation when strict persistency
 		// model is meant to be followed.
@@ -619,6 +675,10 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 	// Skip block if it is in a loop
 		if(GI.getLoopFor(&BB)
 		|| GI.getCondBlockSetFor(&BB)) {
+			errs() << "SKIPPING BLOCK: ";
+			BB.printAsOperand(errs(), false);
+			GI.getCondBlockSetFor(&BB)->printCondBlockSetInfo();
+			errs() << "\n";
 		// Drop the collected sets and move on
 			SF.clear();
 			SW.clear();
@@ -653,16 +713,21 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 			if(CallInst *CI = dyn_cast<CallInst>(Inst)) {
 				Inst->print(errs());
 				std::cout << "\n";
-				errs() << CI->getCalledFunction()->getName() << "\n";
-
-			// Ignore the instrinsics that are not writing to memory
-				if(dyn_cast<IntrinsicInst>(CI)
-				&& !dyn_cast<AnyMemIntrinsic>(CI)) {
-					continue;
-				}
 
 			// Ignore most of the target library calls
 				if(auto *Callee = CI->getCalledFunction()) {
+					errs() << "CALLED FUNCTION: ";
+					errs() << Callee->getName() << "\n";
+
+				// If it is a funtion that potentially terminates the application by
+				// not returning, we need to ignore this function. Example "exit()"
+					errs() << "TEST FOR EXIT\n";
+					if(CalleeIsTerminatesProgram(Callee)) {
+						errs() << "EXIT FOUND\n";
+						continue;
+					}
+
+					errs() << "FUNCTION CALL NOT CALLING EXIT\n";
 					LibFunc TLIFn;
 					if(TLI.getLibFunc(*Callee, TLIFn)) {
 						const DataLayout &DL = Callee->getParent()->getDataLayout();
@@ -673,6 +738,23 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 							continue;
 						}
 					}
+				} else {
+				// We have come across a call instruction that we do not recognize since
+				// it is most likely an indirect function call. Drop the collected sets
+				// and move on.
+					errs() << "CALLED FUNCTION IS NULL\n";
+					SF.clear();
+					SW.clear();
+					SFC.clear();
+					StartFence = false;
+					InterveningWriteOrFlush = true;
+					continue;
+				}
+
+			// Ignore the instrinsics that are not writing to memory
+				if(dyn_cast<IntrinsicInst>(CI)
+				&& !dyn_cast<AnyMemIntrinsic>(CI)) {
+					continue;
 				}
 
 			// Pure fence
@@ -822,9 +904,9 @@ static void PopulateSerialInstsInfo(Function *F, GenCondBlockSetLoopInfo &GI,
 
 // Merge the serial persist instructions across SCCs that do not have stores
 	MergeAcrossSCCs(SCCToWritesPairVect, FenceFreeSCCToWritesPairVect,
-					BBWithFirstSerialWrites, BlockToSCCMap);
+									BBWithFirstSerialWrites, BlockToSCCMap);
 	MergeAcrossSCCs(SCCToFlushesPairVect, FenceFreeSCCToFlushesPairVect,
-					BBWithFirstSerialFlushes, BlockToSCCMap);
+									BBWithFirstSerialFlushes, BlockToSCCMap);
 
 // No need for these anymore
 	BBWithFirstSerialFlushes.clear();
