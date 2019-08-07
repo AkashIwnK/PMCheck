@@ -852,7 +852,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 static void PopulateSerialInstsInfo(Function *F, GenCondBlockSetLoopInfo &GI,
 																  	DominatorTree &DT, AAResults &AA,
 																		TargetLibraryInfo &TLI,
-																		std::vector<Instruction *> FencesVect,
+																		std::vector<Instruction *> &FencesVect,
 																		PMInterfaces<> &PMI,
 																		PerfCheckerInfo<> &WritePCI,
 																		PerfCheckerInfo<> &FlushPCI) {
@@ -1037,8 +1037,15 @@ bool ModelVerifierWrapperPass::runOnFunction(Function &F) {
 	auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 
 	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, FencesVect, PMI,  WritePCI, FlushPCI);
+	errs() << "PRINTING WRITES:\n";
 	WritePCI.printFuncToSerialInstsSetMap();
+	errs() << "PRINTING FLUSHES:\n";
 	FlushPCI.printFuncToSerialInstsSetMap();
+	errs() << "PRINTING FENCES:\n";
+	for(auto *Fence : FencesVect) {
+		Fence->print(errs());
+		errs() << "\n";
+	}
 
 	return false;
 }
@@ -1056,8 +1063,15 @@ bool ModelVerifierPass::runOnFunction(Function &F) {
 	auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 
 	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, FencesVect, PMI,  WritePCI, FlushPCI);
+	errs() << "PRINTING WRITES:\n";
 	WritePCI.printFuncToSerialInstsSetMap();
+	errs() << "PRINTING FLUSHES:\n";
 	FlushPCI.printFuncToSerialInstsSetMap();
+	errs() << "PRINTING FENCES:\n";
+	for(auto *Fence : FencesVect) {
+		Fence->print(errs());
+		errs() << "\n";
+	}
 
 	return false;
 }
