@@ -22,11 +22,11 @@
 #include "GenCondInfo.h"
 #include "GenCondInfoImpl.h"
 
-namespace llvm {
+//namespace llvm {
 
-template<class BlockT, class GraphNodeT,  class GenInfoT>
-std::vector<BlockT *>
-FlowAwarePostOrderVect(const GraphNodeT &G, const GenInfoT &GI);
+//template<class BlockT, class GraphNodeT,  class GenInfoT>
+//std::vector<BlockT *>
+//FlowAwarePostOrderVect(const GraphNodeT &G, const GenInfoT &GI);
 
 // A wrapper function for templated function
 std::vector<BasicBlock *> FlowAwarePostOrder(const DomTreeNodeBase<BasicBlock> *G,
@@ -36,6 +36,6 @@ std::vector<BasicBlock *> FlowAwarePostOrder(const DomTreeNodeBase<BasicBlock> *
 std::vector<BasicBlock *> FlowAwarePreOrder(const DomTreeNodeBase<BasicBlock> *G,
 		 	 	 	 	 	 	 	 	 												const GenCondBlockSetLoopInfo &GI);
 
-}  // end of namespace llvm
+//}  // end of namespace llvm
 
 #endif  // FLOW_AWARE_POST_ORDER_IT_H__
