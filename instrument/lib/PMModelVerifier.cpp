@@ -1,10 +1,10 @@
-//============= Performance Checker for PMDK using applications ================//
+//============ Performance Checker for PMDK using applications ================//
 //
 // Looks for semantics that may detrimant performance of a system using
 // persistant memory or not. We also check  correct instructions
 // are used or not.  Use of incorrect type of instructions can cause slowdowns.
 //
-//===============================================================================//
+//=============================================================================//
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
@@ -32,6 +32,7 @@
 #include "PMModelVerifier.h"
 #include "InstsSet.h"
 #include "CommonSCCOps.h"
+#include "LibFuncValidityCheck.h"
 
 #include <iostream>
 #include <vector>
@@ -43,9 +44,10 @@ using namespace llvm;
 // pre-ordered. Note that we separate the persist instructions in loops from persist
 // instructions outside those loops if we cannot guarantee that the loop executes
 // at least once.
-static void SeparateAcrossLoopsAndCondBlockSets(SCCToInstsPairVectTy &SCCToInstsPairVect,
-												GenCondBlockSetLoopInfo &GI, PMInterfaces<> &PMI, AAResults &AA,
-												SmallVector<Value *, 16> &StackAndGlobalVarVect) {
+static void SeparateAcrossLoopsAndCondBlockSets(
+												SCCToInstsPairVectTy &SCCToInstsPairVect,
+												GenCondBlockSetLoopInfo &GI, PMInterfaces<> &PMI,
+												AAResults &AA, SmallVector<Value *, 16> &StackAndGlobalVarVect) {
 // Get all relevant interfaces
 	auto &PI = PMI.getPersistInterface();
 	auto &DI = PMI.getDrainInterface();
@@ -246,106 +248,6 @@ static void SeparateAcrossLoopsAndCondBlockSets(SCCToInstsPairVectTy &SCCToInsts
 	}
 }
 
-static bool IsValidLibMemoryOperation(const FunctionType &FTy, LibFunc F,
-																			const DataLayout &DL) {
-	auto &Ctx = FTy.getContext();
-	auto *PCharTy = Type::getInt8PtrTy(Ctx);
-	Type *SizeTTy = DL.getIntPtrType(Ctx, 0);
-	auto IsSizeTTy = [SizeTTy](Type *Ty) {
-		return SizeTTy ? Ty == SizeTTy : Ty->isIntegerTy();
-	};
-	unsigned NumParams = FTy.getNumParams();
-
-// Look for specific library calls performing memory operations
-	switch(F) {
-		case LibFunc_strcat:
-	    return (NumParams == 2 && FTy.getReturnType()->isPointerTy() &&
-	            FTy.getParamType(0) == FTy.getReturnType() &&
-	            FTy.getParamType(1) == FTy.getReturnType());
-
-	  case LibFunc_strncat:
-	  	return (NumParams == 3 && FTy.getReturnType()->isPointerTy() &&
-	            FTy.getParamType(0) == FTy.getReturnType() &&
-	            FTy.getParamType(1) == FTy.getReturnType() &&
-	            IsSizeTTy(FTy.getParamType(2)));
-
-	  case LibFunc_strcpy_chk:
-	  case LibFunc_stpcpy_chk:
-	    --NumParams;
-	    if (!IsSizeTTy(FTy.getParamType(NumParams)))
-	      return false;
-
-	  case LibFunc_strcpy:
-		case LibFunc_stpcpy:
-	    return (NumParams == 2 && FTy.getReturnType() == FTy.getParamType(0) &&
-	            FTy.getParamType(0) == FTy.getParamType(1) &&
-	            FTy.getParamType(0) == PCharTy);
-
-	  case LibFunc_strncpy_chk:
-	  case LibFunc_stpncpy_chk:
-	    --NumParams;
-	    if (!IsSizeTTy(FTy.getParamType(NumParams)))
-	      return false;
-
-	  case LibFunc_strncpy:
-	  case LibFunc_stpncpy:
-	  	return (NumParams == 3 && FTy.getReturnType() == FTy.getParamType(0) &&
-	            FTy.getParamType(0) == FTy.getParamType(1) &&
-	            FTy.getParamType(0) == PCharTy &&
-	            IsSizeTTy(FTy.getParamType(2)));
-
-		case LibFunc_memcpy_chk:
-		case LibFunc_memmove_chk:
-			--NumParams;
-			if (!IsSizeTTy(FTy.getParamType(NumParams)))
-				return false;
-
-		case LibFunc_memcpy:
-		case LibFunc_mempcpy:
-		case LibFunc_memmove:
-			return (NumParams == 3 && FTy.getReturnType() == FTy.getParamType(0) &&
-							FTy.getParamType(0)->isPointerTy() &&
-							FTy.getParamType(1)->isPointerTy() &&
-							IsSizeTTy(FTy.getParamType(2)));
-
-		case LibFunc_memset_chk:
-			--NumParams;
-			if (!IsSizeTTy(FTy.getParamType(NumParams)))
-				return false;
-
-		case LibFunc_memset:
-			return (NumParams == 3 && FTy.getReturnType() == FTy.getParamType(0) &&
-							FTy.getParamType(0)->isPointerTy() &&
-							FTy.getParamType(1)->isIntegerTy() &&
-							IsSizeTTy(FTy.getParamType(2)));
-
-		case LibFunc_memccpy:
-			return (NumParams >= 2 && FTy.getParamType(1)->isPointerTy());
-
-		default:
-			return false;
-	}
-	return true;
-}
-
-static bool CalleeIsTerminatesProgram(Function *Callee) {
-	bool PotentiallyTermFuncCall = false;
-	for(auto &CallAttrSet : Callee->getAttributes()) {
-		for(auto &Attr : CallAttrSet) {
-			if(Attr.hasAttribute(Attribute::NoReturn)
-			|| Attr.hasAttribute(Attribute::NoUnwind)) {
-				if(!PotentiallyTermFuncCall) {
-					PotentiallyTermFuncCall = true;
-				} else {
-				// This is a function call that terminates program. Ignore it.
-					return true;
-				}
-			}
-		}
-	}
-	return false;
-}
-
 static void
 IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop,
 												 SerialInstsSet<> &SW, SerialInstsSet<> &SF,
@@ -391,8 +293,13 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 			std::cout << "\n";
 
 		// Ignore most of the target library calls
+			bool IsLibMemCall = false;
 			if(auto *Callee = CI->getCalledFunction()) {
 				errs() << CI->getCalledFunction()->getName() << "\n";
+
+			// If the called function just reads memory, ignore it
+				if(Callee->onlyReadsMemory())
+						continue;
 
 			// If it is a funtion that potentially terminates the application by
 			// not returning, we need to ignore this function. Example "exit()"
@@ -415,6 +322,7 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 						errs() << "NOT VALID LIB MEMORY OPERATION\n";
 						continue;
 					}
+					IsLibMemCall = true;
 				} else {
 					errs() << "NOT A LIBRARY FUNCTION CALL\n";
 				}
@@ -442,21 +350,41 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 				continue;
 			}
 
-		// Ignore the instrinsics that are not writing to memory
-			if(dyn_cast<IntrinsicInst>(CI)
-			&& !dyn_cast<AnyMemIntrinsic>(CI)) {
-				continue;
+		// Check for memory intrinsics
+			bool IsMemIntrinsic = false;
+			if(!IsLibMemCall && dyn_cast<IntrinsicInst>(CI) {
+			// Ignore the instrinsics that are not writing to memory
+				if(!dyn_cast<AnyMemIntrinsic>(CI))
+					continue;
+				IsMemIntrinsic = true;
 			}
 			errs() << "NOT A NON-MEMORY INTRINSIC\n";
 
+		// If the call is a recognizable memory operation that is capable of writing
+		// to stack and globals, we need to perform alias analysis here.
+			if((IsLibMemCall || IsMemIntrinsic)
+			&& WriteAliases(CI, StackAndGlobalVarVect, AA)) {
+				errs() << "WRITE ALIAS CONTINUE\n";
+				continue;
+			}
+
 		// Check if it is a fairly huge memory operation when strict persistency
 		// model is meant to be followed.
-			if(StrictModel && PMMI.isValidInterfaceCall(CI)) {
-			// Make sure that the size is no more than 128 bytes
+			if(!IsLibMemCall && !IsMemIntrinsic && StrictModel
+			&& PMMI.isValidInterfaceCall(CI)) {
+			// Make sure that the size is no more than 128 bytes because that is the
+			// maximum number of bytes that can be written atomically.
 				if(auto Length = dyn_cast<ConstantInt>(PMMI.getLengthOperand(CI))) {
 					assert(!(Length->getZExtValue() > 128)
 							&& "Write Not following strict persistency.");
 				}
+			}
+
+		// Memory operations that may or definitely write to PM are added to set
+			if(IsLibMemCall || IsMemIntrinsic || PMMI.isValidInterfaceCall(CI)) {
+				SW.push_back(CI);
+				FenceStop = false;
+				continue;
 			}
 
 		// Pure flush
@@ -513,23 +441,7 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 		// Skip the following functions and calls that do not change memory
 			if(MI.isValidInterfaceCall(CI)
 			|| MPI.isValidInterfaceCall(CI)
-			|| UI.isValidInterfaceCall(CI)
-			|| CI->getCalledFunction()->onlyReadsMemory()) {
-				continue;
-			}
-
-		// If the call is a recognizable memory operation that is
-		// capable of writing to stack and globals, we need to
-		// perform alias analysis here.
-			bool MostLikelyPMWrite = PMMI.isValidInterfaceCall(CI);
-			if(!MostLikelyPMWrite && WriteAliases(CI, StackAndGlobalVarVect, AA)) {
-				errs() << "WRITE ALIAS CONTINUE\n";
-				continue;
-			}
-
-			if(MostLikelyPMWrite|| dyn_cast<AnyMemIntrinsic>(CI)) {
-				SW.push_back(CI);
-				FenceStop = false;
+			|| UI.isValidInterfaceCall(CI)) {
 				continue;
 			}
 
@@ -719,9 +631,14 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 					errs() << "CALLED FUNCTION: ";
 					errs() << Callee->getName() << "\n";
 
+				// If the called function just reads memory, ignore it
+					if(Callee->onlyReadsMemory())
+							continue;
+
 				// If it is a funtion that potentially terminates the application by
 				// not returning, we need to ignore this function. Example "exit()"
 					errs() << "TEST FOR EXIT\n";
+					bool IsLibMemCall = false;
 					if(CalleeIsTerminatesProgram(Callee)) {
 						errs() << "EXIT FOUND\n";
 						continue;
@@ -737,6 +654,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 							errs() << "NOT VALID LIB MEMORY OPERATION\n";
 							continue;
 						}
+						IsLibMemCall = true;
 					}
 				} else {
 				// We have come across a call instruction that we do not recognize since
@@ -751,14 +669,25 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 					continue;
 				}
 
-			// Ignore the instrinsics that are not writing to memory
-				if(dyn_cast<IntrinsicInst>(CI)
-				&& !dyn_cast<AnyMemIntrinsic>(CI)) {
+			// Check for memory intrinsics
+				bool IsMemIntrinsic = false;
+				if(!IsLibMemCall && dyn_cast<IntrinsicInst>(CI) {
+				// Ignore the instrinsics that are not writing to memory
+					if(!dyn_cast<AnyMemIntrinsic>(CI))
+						continue;
+					IsMemIntrinsic = true;
+				}
+
+			// If the call is a recognizable memory operation that is capable of writing
+			// to stack and globals, we need to perform alias analysis here.
+				if((IsLibMemCall || IsMemIntrinsic)
+				&& WriteAliases(CI, StackAndGlobalVarVect, AA)) {
+					errs() << "WRITE ALIAS CONTINUE\n";
 					continue;
 				}
 
 			// Pure fence
-				if(DI.isValidInterfaceCall(CI)) {
+				if(!IsLibMemCall && !IsMemIntrinsic && DI.isValidInterfaceCall(CI)) {
 				// Ignore the first fence
 					if(StartFence) {
 						TPR.addWritesAndFlushes(SW, SF);
@@ -781,7 +710,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 				}
 
 			// Flush and fence
-				if(PI.isValidInterfaceCall(CI)) {
+				if(!IsLibMemCall && !IsMemIntrinsic && PI.isValidInterfaceCall(CI)) {
 					if(StartFence) {
 						SF.push_back(CI);
 						TPR.addWritesAndFlushes(SW, SF);
@@ -806,9 +735,16 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 					continue;
 
 			// Pure flush
-				if(FI.isValidInterfaceCall(CI)) {
+				if(!IsLibMemCall && !IsMemIntrinsic && FI.isValidInterfaceCall(CI)) {
 					SF.push_back(CI);
 					errs() << "FLUSH FOUND\n";
+					InterveningWriteOrFlush = true;
+					continue;
+				}
+
+			// Memory operations that may or definitely write to PM are added to set
+				if(IsLibMemCall || IsMemIntrinsic || PMMI.isValidInterfaceCall(CI)) {
+					SW.push_back(CI);
 					InterveningWriteOrFlush = true;
 					continue;
 				}
@@ -816,23 +752,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 			// Skip the following functions and calls that do not change memory
 				if(MI.isValidInterfaceCall(CI)
 				|| MPI.isValidInterfaceCall(CI)
-				|| UI.isValidInterfaceCall(CI)
-				|| CI->getCalledFunction()->onlyReadsMemory()) {
-					continue;
-				}
-
-			// If the call is a recognizable memory operation that is
-			// capable of writing to stack and globals, we need to
-			// perform alias analysis here.
-				bool MostLikelyPMWrite = PMMI.isValidInterfaceCall(CI);
-				if(!MostLikelyPMWrite && WriteAliases(CI, StackAndGlobalVarVect, AA)) {
-					errs() << "WRITE ALIAS CONTINUE\n";
-					continue;
-				}
-
-				if(MostLikelyPMWrite|| dyn_cast<AnyMemIntrinsic>(CI)) {
-					SW.push_back(CI);
-					InterveningWriteOrFlush = true;
+				|| UI.isValidInterfaceCall(CI)) {
 					continue;
 				}
 
