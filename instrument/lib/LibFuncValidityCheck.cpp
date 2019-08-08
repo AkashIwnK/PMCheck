@@ -11,6 +11,8 @@
 
 #include "LibFuncValidityCheck.h"
 
+using namespace llvm;
+
 bool IsValidLibMemoryOperation(const FunctionType &FTy, LibFunc F,
 															 const DataLayout &DL) {
 	auto &Context = FTy.getContext();
