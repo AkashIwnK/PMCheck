@@ -7,7 +7,8 @@ CXX  = clang++
 #					PMRedFlushesChecker.cpp PMModelVerifier.cpp
 SOURCES = $(wildcard *.cpp)
 
-PM_VERIFY_SOURCES = CommonSCCOps.cpp GenCondInfo.cpp WriteAliasCheck.cpp PMModelVerifier.cpp FlowAwarePostOrder.cpp
+PM_VERIFY_SOURCES = CommonSCCOps.cpp GenCondInfo.cpp WriteAliasCheck.cpp \
+										PMModelVerifier.cpp FlowAwarePostOrder.cpp LibFuncValidityCheck.cpp
 
 
 OPTIMIZATION = -O2
