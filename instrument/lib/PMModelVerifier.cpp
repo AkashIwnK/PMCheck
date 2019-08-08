@@ -352,7 +352,7 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 
 		// Check for memory intrinsics
 			bool IsMemIntrinsic = false;
-			if(!IsLibMemCall && dyn_cast<IntrinsicInst>(CI) {
+			if(!IsLibMemCall && dyn_cast<IntrinsicInst>(CI)) {
 			// Ignore the instrinsics that are not writing to memory
 				if(!dyn_cast<AnyMemIntrinsic>(CI))
 					continue;
@@ -627,6 +627,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 				std::cout << "\n";
 
 			// Ignore most of the target library calls
+				bool IsLibMemCall = false;
 				if(auto *Callee = CI->getCalledFunction()) {
 					errs() << "CALLED FUNCTION: ";
 					errs() << Callee->getName() << "\n";
@@ -671,7 +672,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 
 			// Check for memory intrinsics
 				bool IsMemIntrinsic = false;
-				if(!IsLibMemCall && dyn_cast<IntrinsicInst>(CI) {
+				if(!IsLibMemCall && dyn_cast<IntrinsicInst>(CI)) {
 				// Ignore the instrinsics that are not writing to memory
 					if(!dyn_cast<AnyMemIntrinsic>(CI))
 						continue;
