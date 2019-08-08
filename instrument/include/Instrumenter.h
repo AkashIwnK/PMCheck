@@ -3,7 +3,6 @@
 #ifndef PM_INSTRUMENTER_H_
 #define PM_INSTRUMENTER_H_
 
-
 #include "CondBlockBase.h"
 #include "CondBlockBaseImpl.h"
 #include "GenCondInfo.h"
@@ -26,6 +25,7 @@ class InstrumentationPass : public FunctionPass {
 	Function *RecordStrictWrites;
 	Function *RecordNonStrictWrites;
 	Function *RecordFlushes;
+	Function *Strlen;
 
 // Map for mapping instruction IDs and their line numbers
 	std::map<uint32_t, uint64_t> InstIdToLineNoMap;
