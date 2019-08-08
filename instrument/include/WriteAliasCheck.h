@@ -21,11 +21,12 @@
 
 //namespace llvm {
 
-bool WriteAliases(Instruction *Write, SmallVector<Value *, 16> &StackAndGlobalVarVect,
-		   	   	   AAResults &AA);
+bool WriteAliases(StoreInst *SI, SmallVector<Value *, 16> &StackAndGlobalVarVect,
+									AAResults &AA);
+
+bool WriteAliases(CallInst *CI, SmallVector<Value *, 16> &StackAndGlobalVarVect,
+									AAResults &AA);
 
 //}  // end of namespace llvm
 
 #endif // PM_WRITE_ALIAS_CHECK_H__
-
-
