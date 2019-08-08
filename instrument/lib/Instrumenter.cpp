@@ -45,6 +45,7 @@
 #include "InstsSet.h"
 #include "CommonSCCOps.h"
 #include "Instrumenter.h"
+#include "LibFuncValidityCheck.h"
 
 #include <string>
 
@@ -91,79 +92,17 @@ static ConstantInt *GetLineNumber(Instruction *I) {
 	return nullptr;
 }
 
-static void InstrumentWrite(Instruction *I, LLVMContext &Context,
-	 													PMInterfaces<> &PMI, const DataLayout &DL,
-														AllocaInst *WriteIdArray, AllocaInst *WriteAddrArray,
-														AllocaInst *WriteSizeArray, Value *WriteIndex) {
-	errs() << "INSTRUMENTING WRITE: ";
-	I->print(errs());
-	errs() << "\n";
+static void InstrumentPersistOp(Instruction *I, ) {
 
-	auto *One = ConstantInt::get(Type::getInt64Ty(Context), 1);
-	auto *Zero = ConstantInt::get(Type::getInt64Ty(Context), 0);
-	auto &PMMI = PMI.getPmemInterface();
-
-// Increment the index
-	auto *Index = new LoadInst(Type::getInt64Ty(Context), WriteIndex, "", I);
-	auto *NewIndex = BinaryOperator::Create(Instruction::Add, Index, One, "", I);
-	new StoreInst(NewIndex, WriteIndex, I);
-
-// Compute the ID for this instruction
-	auto Id = InstToIdMap[I] = RefIDPrefix + InstCounter++;
-
-// Index the ID into the write arrays
-	std::vector<Value *> IndexVect;
-	IndexVect.push_back(Zero);
-	IndexVect.push_back(NewIndex);
-	auto *IdArrayPtr = GetElementPtrInst::Create(WriteIdArray->getAllocatedType(),
-														WriteIdArray, ArrayRef<Value *>(IndexVect), "", I);
-	auto *AddrArrayPtr = GetElementPtrInst::Create(WriteAddrArray->getAllocatedType(),
-													WriteAddrArray, ArrayRef<Value *>(IndexVect), "", I);
-	auto *SizeArrayPtr = GetElementPtrInst::Create(WriteSizeArray->getAllocatedType(),
-													WriteSizeArray, ArrayRef<Value *>(IndexVect), "", I);
-
-// Write to the arrays
-	auto *IdValue = ConstantInt::get(Type::getInt32Ty(Context), Id);
-	new StoreInst(IdValue, IdArrayPtr, I);
-	if(auto *SI = dyn_cast<StoreInst>(I)) {
-		auto *AddrInt = new PtrToIntInst(SI->getPointerOperand(),
-																		 Type::getInt64Ty(Context), "", I);
-		new StoreInst(AddrInt, AddrArrayPtr, I);
-		auto *Size = ConstantInt::get(Type::getInt64Ty(Context),
-											DL.getTypeStoreSize(SI->getValueOperand()->getType()));
-		new StoreInst(Size, SizeArrayPtr, I);
-		I->getParent()->getParent()->print(errs());
-		return;
-	}
-
-// This has to be a call instruction
-	auto *CI = dyn_cast<CallInst>(I);
-	assert(CI && "Error in PM Analysis record results.");
-
-// Check if it is an memory intrinsic or PMDK interface
-	if(AnyMemIntrinsic *MI = dyn_cast<AnyMemIntrinsic>(CI)) {
-		auto *AddrInt = new PtrToIntInst(MI->getRawDest(),
-																		 Type::getInt64Ty(Context), "", I);
-		new StoreInst(AddrInt, AddrArrayPtr, I);
-		new StoreInst(MI->getLength(), SizeArrayPtr, I);
-		I->getParent()->getParent()->print(errs());
-		return;
-	}
-
-// It is a persistent write
-	if(PMMI.isValidInterfaceCall(CI)) {
-		auto *AddrInt = new PtrToIntInst(PMMI.getDestOperand(CI),
-																		 Type::getInt64Ty(Context), "", I);
-		new StoreInst(AddrInt, AddrArrayPtr, I);
-		new StoreInst(PMMI.getLengthOperand(CI), SizeArrayPtr, I);
-		return;
-	}
 }
 
 static void InstrumentWrite(Instruction *I, LLVMContext &Context,
 	 													PMInterfaces<> &PMI, const DataLayout &DL,
+														TargetLibraryInfo &TLI,
 														AllocaInst *WriteIdArray, AllocaInst *WriteAddrArray,
-														AllocaInst *WriteSizeArray, Value *WriteIndex) {
+														AllocaInst *WriteSizeArray, Value *WriteIndex,
+														DenseMap<const Instruction *, uint32_t>  &InstToIdMap,
+													  uint32_t &InstCounter) {
 	errs() << "INSTRUMENTING WRITE: ";
 	I->print(errs());
 	errs() << "\n";
@@ -225,6 +164,90 @@ static void InstrumentWrite(Instruction *I, LLVMContext &Context,
 																		 Type::getInt64Ty(Context), "", I);
 		new StoreInst(AddrInt, AddrArrayPtr, I);
 		new StoreInst(PMMI.getLengthOperand(CI), SizeArrayPtr, I);
+		return;
+	}
+
+// Or, it could be a call to a library function
+	LibFunc TLIFn;
+	auto *Callee = CI->getCalledFunction();
+	assert(Callee && "Indirect function call in the set.");
+	assert(TLI.getLibFunc(*Callee, TLIFn)
+			&& TLI.IsValidLibMemoryOperation(*(Callee->getFunctionType()), TLIFn, DL)
+			&& "Unknown function in set.");
+	auto *AddrInt = new PtrToIntInst(CI->getArgOperand(0),
+																	 Type::getInt64Ty(Context), "", I);
+	new StoreInst(AddrInt, AddrArrayPtr, I);
+
+// Check if the library function being called has a size operand
+	if(Callee->getFunctionType()->getNumParams() >= 3) {
+		new StoreInst(CI->getArgOperand(2), SizeArrayPtr, I);
+	} else {
+	// We do not have a size operand to work with. This is characteristically
+	// common for string library functions operating on strings. So we can insert
+	// strlen function to get string length. Now, if the string is not null
+	// terminated, any operation might cause undefined behaviour. Same is true for
+	// strlen on src operand, therefore, it really would not make a huge difference.
+		std::vector<Value *> ArgVect;
+		ArgVect.push_back(CI->getArgOperand(1));
+		auto *StringSize = CallInst::Create(Strlen->getFunctionType(),
+									 	 										Strlen, ArrayRef<Value *>(ArgVect), "", I);
+		new StoreInst(StringSize, SizeArrayPtr, I);
+	}
+}
+
+static void InstrumentFlush(Instruction *I, LLVMContext &Context,
+	 													PMInterfaces<> &PMI, const DataLayout &DL,
+														AllocaInst *FlushIdArray, AllocaInst *FlushAddrArray,
+														AllocaInst *FlushSizeArray, Value *FlushIndex,
+														DenseMap<const Instruction *, uint32_t>  &InstToIdMap,
+														uint32_t &InstCounter) {
+	errs() << "INSTRUMENTING FLUSH: ";
+	I->print(errs());
+	errs() << "\n";
+
+// This has to be a call instruction
+	auto *CI = dyn_cast<CallInst>(I);
+	assert(CI && "Error in PM Analysis record results.");
+
+	auto *One = ConstantInt::get(Type::getInt64Ty(Context), 1);
+	auto *Zero = ConstantInt::get(Type::getInt64Ty(Context), 0);
+	auto &FI = PMI.getFlushInterface();
+	auto &PI = PMI.getPersistInterface();
+
+// Increment the index
+	auto *Index = new LoadInst(Type::getInt64Ty(Context), FlushIndex, "", I);
+	auto *NewIndex = BinaryOperator::Create(Instruction::Add, Index, One, "", I);
+	new StoreInst(NewIndex, FlushIndex, I);
+
+// Compute the ID for this instruction
+	auto Id = InstToIdMap[I] = RefIDPrefix + InstCounter++;
+
+// Index the ID into the write arrays
+	std::vector<Value *> IndexVect;
+	IndexVect.push_back(Zero);
+	IndexVect.push_back(NewIndex);
+	auto *IdArrayPtr = GetElementPtrInst::Create(FlushIdArray->getAllocatedType(),
+														FlushIdArray, ArrayRef<Value *>(IndexVect), "", I);
+	auto *AddrArrayPtr = GetElementPtrInst::Create(FlushAddrArray->getAllocatedType(),
+													FlushAddrArray, ArrayRef<Value *>(IndexVect), "", I);
+	auto *SizeArrayPtr = GetElementPtrInst::Create(FlushSizeArray->getAllocatedType(),
+													FlushSizeArray, ArrayRef<Value *>(IndexVect), "", I);
+
+// Write to the arrays
+	auto *IdValue = ConstantInt::get(Type::getInt32Ty(Context), Id);
+	new StoreInst(IdValue, IdArrayPtr, I);
+	if(FI.isValidInterfaceCall(CI)) {
+		auto *AddrInt = new PtrToIntInst(FI.getPMemAddrOperand(CI),
+																		 Type::getInt64Ty(Context), "", I);
+		new StoreInst(AddrInt, AddrArrayPtr, I);
+		new StoreInst(FI.getLengthOperand(CI), SizeArrayPtr, I);
+		return;
+	}
+	if(PI.isValidInterfaceCall(CI)) {
+		auto *AddrInt = new PtrToIntInst(PI.getPMemAddrOperand(CI),
+																		 Type::getInt64Ty(Context), "", I);
+		new StoreInst(AddrInt, AddrArrayPtr, I);
+		new StoreInst(PI.getLengthOperand(CI), SizeArrayPtr, I);
 		return;
 	}
 }
@@ -247,30 +270,7 @@ static void InstrumentForPMModelVerifier(Function *F,
 	auto &DL = F->getParent()->getDataLayout();
 	auto &PMMI = PMI.getPmemInterface();
 
-// Iterate over the fences and instrument them
-	uint32_t InstCounter = 0;
-	for(auto *Fence : FencesVect) {
-		errs() << "INSTRUMENTING FENCE: ";
-		Fence->print(errs());
-		errs() << "\n";
-	// Assign a static ID to the fence
-		auto Id = InstToIdMap[Fence] = RefIDPrefix + InstCounter++;
-		errs() << "FENCE ID: " << Id << "\n";
-
-	// Instrument now
-		std::vector<Value *> ArgVect;
-		ArgVect.push_back(ConstantInt::get(Type::getInt32Ty(Context), Id));
-		CallInst::Create(FenceEncountered->getFunctionType(),
-						 				 FenceEncountered, ArrayRef<Value *>(ArgVect), "", Fence);
-		errs() << "FENCE INSTRUMENTED\n";
-	}
-	errs() << "ALL FENCES INSTRUMENTED\n";
-
 // Allocate the variables to record instruction IDs, operation addresses, size, etc.
-	auto *WriteArraySize = ConstantInt::get(Type::getInt64Ty(Context),
-																					PerfCheckerWriteInfo.size());
-	auto *FlushArraySize = ConstantInt::get(Type::getInt64Ty(Context),
-																					PerfCheckerFlushInfo.size());
 	auto *WriteArray32Ty = ArrayType::get(Type::getInt32Ty(Context),
 																				PerfCheckerWriteInfo.size());
 	auto *WriteArray64Ty = ArrayType::get(Type::getInt64Ty(Context),
@@ -326,6 +326,7 @@ static void InstrumentForPMModelVerifier(Function *F,
 	};
 
 // Instrument Writes
+	uint32_t InstCounter = 0;
 	for(PerfCheckerInfo<>::iterator It = PerfCheckerWriteInfo.begin(F);
 			It != PerfCheckerWriteInfo.end(F); ++It) {
 		auto SerialInsts = *It;
@@ -333,12 +334,12 @@ static void InstrumentForPMModelVerifier(Function *F,
 		GenLoop *L = GI.getLoopFor(SerialInsts[0]->getParent());
 		Instruction *PrevInstrumentedInst = nullptr;
 		for(auto *I : SerialInsts) {
-			InstrumentWrite(I, Context, PMI, DL, WriteIdArray, WriteAddrArray,
-											WriteSizeArray, WriteIndex);
+			InstrumentWrite(I, Context, PMI, DL, TLI, WriteIdArray, WriteAddrArray,
+											WriteSizeArray, WriteIndex, InstToIdMap, InstCounter);
 			if(L != GI.getLoopFor(I->getParent())) {
 			// Since this is a different loop, record the write
 				PrevInstrumentedInst = I;
-				RecordWritesBefore(I, WriteIdArray, WriteAddrArray, WriteSizeArray,
+				RecordOpsBefore(I, WriteIdArray, WriteAddrArray, WriteSizeArray,
 													 WriteIndex, RecordNonStrictWrites);
 			}
 		}
@@ -346,13 +347,54 @@ static void InstrumentForPMModelVerifier(Function *F,
 	// Instrument the rest of set if it has not been yet
 		auto *LastInstInSet = SerialInsts[SerialInsts.size() - 1];
 		if(!PrevInstrumentedInst || PrevInstrumentedInst != LastInstInSet) {
-			RecordWritesBefore(LastInstInSet, WriteIdArray, WriteAddrArray,
-				 								 WriteSizeArray, WriteIndex, RecordNonStrictWrites);
+			RecordOpsBefore(LastInstInSet, WriteIdArray, WriteAddrArray,
+				 							WriteSizeArray, WriteIndex, RecordNonStrictWrites);
 		}
 	}
 
 // Instrument Flushes
+	for(PerfCheckerInfo<>::iterator It = PerfCheckerFlushInfo.begin(F);
+			It != PerfCheckerFlushInfo.end(F); ++It) {
+		auto SerialInsts = *It;
+		Instruction *PrevInst = SerialInsts[0];
+		GenLoop *L = GI.getLoopFor(SerialInsts[0]->getParent());
+		Instruction *PrevInstrumentedInst = nullptr;
+		for(auto *I : SerialInsts) {
+			InstrumentFlush(I, Context, PMI, DL, FlushIdArray, FlushAddrArray,
+											FlushSizeArray, FlushIndex, InstToIdMap, InstCounter);
+			if(L != GI.getLoopFor(I->getParent())) {
+			// Since this is a different loop, record the write
+				PrevInstrumentedInst = I;
+				RecordOpsBefore(I, FlushIdArray, FlushAddrArray, FlushSizeArray,
+												FlushIndex, RecordFlushes);
+			}
+		}
 
+	// Instrument the rest of set if it has not been yet
+		auto *LastInstInSet = SerialInsts[SerialInsts.size() - 1];
+		if(!PrevInstrumentedInst || PrevInstrumentedInst != LastInstInSet) {
+			RecordOpsBefore(LastInstInSet, FlushIdArray, FlushAddrArray,
+											FlushSizeArray, FlushIndex, RecordFlushes);
+		}
+	}
+
+// Iterate over the fences and instrument them
+	for(auto *Fence : FencesVect) {
+		errs() << "INSTRUMENTING FENCE: ";
+		Fence->print(errs());
+		errs() << "\n";
+	// Assign a static ID to the fence
+		auto Id = InstToIdMap[Fence] = RefIDPrefix + InstCounter++;
+		errs() << "FENCE ID: " << Id << "\n";
+
+	// Instrument now
+		std::vector<Value *> ArgVect;
+		ArgVect.push_back(ConstantInt::get(Type::getInt32Ty(Context), Id));
+		CallInst::Create(FenceEncountered->getFunctionType(),
+						 				 FenceEncountered, ArrayRef<Value *>(ArgVect), "", Fence);
+		errs() << "FENCE INSTRUMENTED\n";
+	}
+	errs() << "ALL FENCES INSTRUMENTED\n";
 }
 
 static void DefineConstructor(Module &M, LLVMContext &Context,
@@ -453,6 +495,19 @@ bool InstrumentationPass::doInitialization(Module &M) {
 	RecordFlushes = Function::Create(FuncType, GlobalValue::ExternalLinkage,
 																	 "RecordFlushes", &M);
 	RecordFlushes->setOnlyAccessesInaccessibleMemory();
+
+// We might been strlen function in the string library
+	TypeVect.clear();
+	TypeVect.push_back(PointerType::get(Type::getInt8Ty(Context), 0));
+	FuncType = FunctionType::get(Type::getInt64Ty(Context),
+															 ArrayRef<Type *>(TypeVect), 0);
+	auto &StrlenCallee = M.getOrInsert(StringRef("strlen"), FuncType);
+	Strlen = dyn_cast<Function>(StrlenCallee.getCallee());
+	if(!Strlen) {
+	// A bitcast of the function was returned. Strip the cast.
+		Strlen = dyn_cast<Function>(StrlenCallee.getCallee())->stripPointerCasts());
+		assert(Strlen && "Error in getting strlen declaration.");
+	}
 	errs() << "PASS INITIALIZED\n";
 	return false;
 }
