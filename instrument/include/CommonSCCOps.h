@@ -23,6 +23,8 @@
 
 //namespace llvm {
 
+using namespace llvm;
+
 typedef std::pair<SCC_Iterator<Function *>, SerialInstsSet<>> SCCToInstsPairTy;
 typedef SmallVector<SCCToInstsPairTy, 16> SCCToInstsPairVectTy;
 
