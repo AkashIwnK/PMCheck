@@ -249,7 +249,7 @@ static void InstrumentFlush(Instruction *I, LLVMContext &Context,
 }
 
 static void InstrumentForPMModelVerifier(Function *F,
-									std::vector<Instruction *> &FencesVect,
+									SmallVector<Instruction *, 4> &FencesVect,
 									PerfCheckerInfo<> &PerfCheckerWriteInfo,
 									PerfCheckerInfo<> &PerfCheckerFlushInfo,
 									DenseMap<const Instruction *, uint32_t>  &InstToIdMap,
@@ -268,33 +268,45 @@ static void InstrumentForPMModelVerifier(Function *F,
 	auto &PMMI = PMI.getPmemInterface();
 
 // Allocate the variables to record instruction IDs, operation addresses, size, etc.
-	auto *WriteArray32Ty = ArrayType::get(Type::getInt32Ty(Context),
-																				PerfCheckerWriteInfo.size());
-	auto *WriteArray64Ty = ArrayType::get(Type::getInt64Ty(Context),
-																				PerfCheckerWriteInfo.size());
-	auto *FlushArray32Ty = ArrayType::get(Type::getInt32Ty(Context),
-																				PerfCheckerFlushInfo.size());
-	auto *FlushArray64Ty = ArrayType::get(Type::getInt64Ty(Context),
-																				PerfCheckerFlushInfo.size());
+	AllocaInst *WriteIdArray;
+	AllocaInst *WriteAddrArray;
+	AllocaInst *WriteSizeArray;
+	AllocaInst *WriteIndex;
+	AllocaInst *FlushIdArray;
+	AllocaInst *FlushAddrArray;
+	AllocaInst *FlushSizeArray;
+	AllocaInst *FlushIndex;
 	auto *FirstInstInEntryBlock = F->getEntryBlock().getFirstNonPHI();
-	auto *WriteIdArray = new AllocaInst(WriteArray32Ty, 0, One, 0,
-	 																		"", FirstInstInEntryBlock);
-	auto *WriteAddrArray = new AllocaInst(WriteArray64Ty, 0, One,
-																				0, "", FirstInstInEntryBlock);
-	auto *WriteSizeArray = new AllocaInst(WriteArray64Ty, 0, One,
-																				0, "", FirstInstInEntryBlock);
-	auto *WriteIndex = new AllocaInst(Type::getInt64Ty(Context), 0, One, 0, "",
-									  								FirstInstInEntryBlock);
-	auto *FlushIdArray = new AllocaInst(FlushArray32Ty, 0, One, 0,
-																			"", FirstInstInEntryBlock);
-	auto *FlushAddrArray = new AllocaInst(FlushArray64Ty, 0, One,
-																				0, "", FirstInstInEntryBlock);
-	auto *FlushSizeArray = new AllocaInst(FlushArray64Ty, 0, One,
-																				0, "", FirstInstInEntryBlock);
-	auto *FlushIndex = new AllocaInst(Type::getInt64Ty(Context), 0, One, 0, "",
-									  								FirstInstInEntryBlock);
-	new StoreInst(Zero, WriteIndex, FirstInstInEntryBlock);
-	new StoreInst(Zero, FlushIndex, FirstInstInEntryBlock);
+	if(PerfCheckerWriteInfo.size(F)) {
+		auto *WriteArray32Ty = ArrayType::get(Type::getInt32Ty(Context),
+																		PerfCheckerWriteInfo.maxSetSize(F));
+		auto *WriteArray64Ty = ArrayType::get(Type::getInt64Ty(Context),
+																		PerfCheckerWriteInfo.maxSetSize(F));
+		WriteIdArray = new AllocaInst(WriteArray32Ty, 0, One, 0,
+	 																"", FirstInstInEntryBlock);
+		WriteAddrArray = new AllocaInst(WriteArray64Ty, 0, One,
+																		0, "", FirstInstInEntryBlock);
+		WriteSizeArray = new AllocaInst(WriteArray64Ty, 0, One,
+																		0, "", FirstInstInEntryBlock);
+		WriteIndex = new AllocaInst(Type::getInt64Ty(Context), 0, One, 0, "",
+									  						FirstInstInEntryBlock);
+		new StoreInst(Zero, WriteIndex, FirstInstInEntryBlock);
+	}
+	if(PerfCheckerWriteInfo.size(F)) {
+		auto *FlushArray32Ty = ArrayType::get(Type::getInt32Ty(Context),
+																		PerfCheckerFlushInfo.maxSetSize(F));
+		auto *FlushArray64Ty = ArrayType::get(Type::getInt64Ty(Context),
+																		PerfCheckerFlushInfo.maxSetSize(F));
+		FlushIdArray = new AllocaInst(FlushArray32Ty, 0, One, 0,
+																	"", FirstInstInEntryBlock);
+		FlushAddrArray = new AllocaInst(FlushArray64Ty, 0, One,
+																		0, "", FirstInstInEntryBlock);
+		FlushSizeArray = new AllocaInst(FlushArray64Ty, 0, One,
+																		0, "", FirstInstInEntryBlock);
+		FlushIndex = new AllocaInst(Type::getInt64Ty(Context), 0, One, 0, "",
+									  						FirstInstInEntryBlock);
+		new StoreInst(Zero, FlushIndex, FirstInstInEntryBlock);
+	}
 	errs() << "ALL ALLOCAS ARE INSERTED\n";
 	F->print(errs());
 
@@ -394,6 +406,7 @@ static void InstrumentForPMModelVerifier(Function *F,
 		errs() << "FENCE INSTRUMENTED\n";
 	}
 	errs() << "ALL FENCES INSTRUMENTED\n";
+	F->print(errs());
 }
 
 static void DefineConstructor(Module &M, LLVMContext &Context,
@@ -533,7 +546,7 @@ bool InstrumentationPass::runOnFunction(Function &F) {
 	auto PerfCheckerFlushInfo =
 					getAnalysis<ModelVerifierWrapperPass>().getPerfCheckerFlushInfo();
 	errs() << "GOT PERF CHECKER FLUSH INFO\n";
-	auto FencesVect = getAnalysis<ModelVerifierWrapperPass>().getFencesVect();
+	auto FencesVect = getAnalysis<ModelVerifierWrapperPass>().getFencesInfoFor(&F);
 	errs() << "GOT FENCE VECTOR\n";
 	auto PMI = getAnalysis<ModelVerifierWrapperPass>().getPmemInterfaces();
 	errs() << "GOT MODEL VERIFIER RESULTS\n";
