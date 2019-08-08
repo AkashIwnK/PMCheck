@@ -7,8 +7,10 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Attributes.h"
 
+using namespace llvm;
+
 bool IsValidLibMemoryOperation(const FunctionType &FTy, LibFunc F,
-															 const DataLayout &DL);
+			       const DataLayout &DL);
 
 bool CalleeIsTerminatesProgram(Function *Callee);
 
