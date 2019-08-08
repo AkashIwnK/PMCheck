@@ -21,6 +21,8 @@
 
 //namespace llvm {
 
+using namespace llvm;
+
 bool WriteAliases(StoreInst *SI, SmallVector<Value *, 16> &StackAndGlobalVarVect,
 									AAResults &AA);
 
