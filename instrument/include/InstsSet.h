@@ -51,15 +51,26 @@ class PerfCheckerInfo {
 		using const_iterator = typename std::vector<SerialInstsSet<Inst>>::const_iterator;
 	};
 
-	std::map<Func *, SerialInstsSetVectTy> FuncToSerialInstsSetMap;
+	DenseMap<Func *, SerialInstsSetVectTy> FuncToSerialInstsSetMap;
 
 public:
 	void addSerialInstsSet(Func *F, SerialInstsSet<Inst> &InstsVect) {
 		FuncToSerialInstsSetMap[F].push_back(InstsVect);
 	}
 
-	unsigned size() const {
-		return FuncToSerialInstsSetMap.size();
+	unsigned maxSetSize(Func *F) const {
+		unsigned Size = 0;
+		const auto &SIVect = FuncToSerialInstsSetMap.lookup(F);
+		for(auto &SI : SIVect) {
+			if(SI.size() > Size)
+				Size = SI.size();
+		}
+		return Size;
+	}
+
+	unsigned size(Func *F) const {
+		const auto &SIVect = FuncToSerialInstsSetMap.lookup(F);
+		return SIVect.size();
 	}
 
 	void clear() {
