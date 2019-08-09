@@ -100,20 +100,20 @@ void CondBlockSetBase<BlockT, CondBlockSetT>::
 			condBlockSet->addCondBlock(const_cast<BlockT *>
 								(newSubCondBlockSet->getCondBlockSetTail()));
 		}
-		outs() << "NEW CONDBLOCKS TO BE ADDED\n";
+		errs() << "NEW CONDBLOCKS TO BE ADDED\n";
 	// Add the new condBlocks
 		typename std::vector<BlockT *>::iterator it = (newSubCondBlockSet->getCondBlocks()).begin();
 		while(it != (newSubCondBlockSet->getCondBlocks()).end()) {
 			if(!condBlockSet->contains(*it)) {
-				outs() << "INSIDE\n";
-				outs() << "NUM CONDBLOCK SET: "
+				errs() << "INSIDE\n";
+				errs() << "NUM CONDBLOCK SET: "
 											<< newSubCondBlockSet->getNumCondBlocksInSet() <<"\n";
 				condBlockSet->addCondBlock(*it);
 			}
-			outs() << "HERE\n";
+			errs() << "HERE\n";
 			it++;
 		}
-		outs() << "NEW CONDBLOCKS ADDED\n";
+		errs() << "NEW CONDBLOCKS ADDED\n";
 		condBlockSet = condBlockSet->getParentCondBlockSet();
 	}
 
@@ -204,7 +204,7 @@ static BlockT *FindTail(BlockT *A, BlockT *B,
 	worklist.push_back(A);
 	SmallPtrSet<BlockT *, 32> visited;
 	while(!worklist.empty()) {
-		outs() << "LOOP START\n";
+		errs() << "LOOP START\n";
 		BlockT *curblock = worklist.pop_back_val();
 
 	// Check if the block has already been previously visited
@@ -249,14 +249,14 @@ static void BuildCondBlockSet(BlockT *header, BlockT *tail,
 							  std::vector<CondBlockSetT *> &condBlockSetVect,
 							  const DominatorTreeBase<BlockT, false> &domTree,
 							  CondTreeInfoBase<BlockT, CondBlockSetT> *condTreeInfo) {
-	//outs() << "++++++++++++++++ BUILDING CONDBLOCK SET +++++++++++++++++++++\n";
+	//errs() << "++++++++++++++++ BUILDING CONDBLOCK SET +++++++++++++++++++++\n";
 // All the children node of this node are in the then block set
 	CondBlockSetT *blockSet = condTreeInfo->AllocateCondBlockSet();
 	blockSet->setHeader(header);
 	std::vector<BlockT *> blockVect;
-	outs() << "HEADER OF CONDBLOCK SET: ";
+	errs() << "HEADER OF CONDBLOCK SET: ";
 	header->printAsOperand(errs(), false);
-	outs() << "\n";
+	errs() << "\n";
 	for(auto childDomNode : post_order(childNode)) {
 		childDomNode->getBlock()->printAsOperand(errs(), false);
 		blockVect.push_back(childDomNode->getBlock());
@@ -264,9 +264,9 @@ static void BuildCondBlockSet(BlockT *header, BlockT *tail,
 
 // Put the block pointers in the condBlock set. We also map them to the
 // condblock set since we discover the inner-most condblock sets first.
-	outs() << "BLOCKS IN CONDSET ";
+	errs() << "BLOCKS IN CONDSET ";
 	while(!blockVect.empty()) {
-		outs() << " ";
+		errs() << " ";
 		BlockT *block = blockVect.back();
 		block->printAsOperand(errs(), false);
 		blockSet->addCondBlock(block);
@@ -276,7 +276,7 @@ static void BuildCondBlockSet(BlockT *header, BlockT *tail,
 		if(!condTreeInfo->getCondBlockSetFor(block))
 			condTreeInfo->addToMap(blockSet, block);
 	}
-	outs() << "\n";
+	errs() << "\n";
 	blockSet->setTail(tail);
 	blockSet->printSubCondBlockSets();
 
@@ -320,7 +320,7 @@ static void BuildCondBlockSet(BlockT *header, BlockT *tail,
 // Add the block set to the std::vector to track the sub-block sets
 	condBlockSetVect.push_back(blockSet);
 	//blockSet->printSubCondBlockSetsInSet();
-	//outs() << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++=\n";
+	//errs() << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++=\n";
 }
 
 
@@ -332,9 +332,9 @@ static void FindingCondBlockSets(BlockT *potentialHeader,
 								 CondTreeInfoBase<BlockT, CondBlockSetT> *condTreeInfo) {
 // Check to see if it is a triangle case. See if one successor is reachable from the other.
 	auto *cond_branch = potentialHeader->getTerminator();
-	outs() << "COND BRANCH: ";
+	errs() << "COND BRANCH: ";
 	cond_branch->print(errs());
-	outs() << "\n";
+	errs() << "\n";
 	bool reachable = IsPotentiallyReachable<BlockT>(cond_branch->getSuccessor(0),
 													cond_branch->getSuccessor(1), domTree);
 	if(reachable == false) {
@@ -348,24 +348,24 @@ static void FindingCondBlockSets(BlockT *potentialHeader,
 		// do is to try to find the tail first.
 			BlockT *tailBlock = FindTail<BlockT>(cond_branch->getSuccessor(0),
 										 cond_branch->getSuccessor(1), domTree);
-			outs() << "TAIL BLOCK FOUND: ";
+			errs() << "TAIL BLOCK FOUND: ";
 			if(tailBlock) {
 				tailBlock->printAsOperand(errs(), false);
 			} else {
-				outs() << "NONE";
+				errs() << "NONE";
 			}
-			outs() << "\n";
+			errs() << "\n";
 
-			outs() << "SUCCESSOR 0\n";
+			errs() << "SUCCESSOR 0\n";
 			cond_branch->getSuccessor(0)->printAsOperand(errs(), false);
-			outs() << "\n";
+			errs() << "\n";
 			DomTreeNodeBase<BlockT> *childNode = domTree.getNode(cond_branch->getSuccessor(0));
 			BuildCondBlockSet<BlockT, CondBlockSetT>(potentialHeader, tailBlock,
 									childNode, condBlockSetVect, domTree, condTreeInfo);
 
-			outs() << "SUCCESSOR 1\n";
+			errs() << "SUCCESSOR 1\n";
 			cond_branch->getSuccessor(1)->printAsOperand(errs(), false);
-			outs() << "\n";
+			errs() << "\n";
 			childNode = domTree.getNode(cond_branch->getSuccessor(1));
 			BuildCondBlockSet<BlockT, CondBlockSetT>(potentialHeader, tailBlock,
 									childNode, condBlockSetVect, domTree, condTreeInfo);
@@ -373,11 +373,11 @@ static void FindingCondBlockSets(BlockT *potentialHeader,
 		}
 
 	// Successor 0 reachable  from 1
-		outs() << "Edge from ";
+		errs() << "Edge from ";
 		cond_branch->getSuccessor(1)->printAsOperand(errs(), false);
-		outs() << " to ";
+		errs() << " to ";
 		cond_branch->getSuccessor(0)->printAsOperand(errs(), false);
-		outs() << "\n";
+		errs() << "\n";
 		BlockT *tailBlock = cond_branch->getSuccessor(0);
 		DomTreeNodeBase<BlockT> *childNode = domTree.getNode(cond_branch->getSuccessor(1));
 		BuildCondBlockSet<BlockT, CondBlockSetT>(potentialHeader, tailBlock,
@@ -386,11 +386,11 @@ static void FindingCondBlockSets(BlockT *potentialHeader,
 	}
 
 // Successor 1 reachable  from 0
-	outs() << "Edge from ";
+	errs() << "Edge from ";
 	cond_branch->getSuccessor(0)->printAsOperand(errs(), false);
-	outs() << " to ";
+	errs() << " to ";
 	cond_branch->getSuccessor(1)->printAsOperand(errs(), false);
-	outs() << "\n";
+	errs() << "\n";
 	BlockT *tailBlock = cond_branch->getSuccessor(1);
 	DomTreeNodeBase<BlockT> *childNode = domTree.getNode(cond_branch->getSuccessor(0));
 	BuildCondBlockSet<BlockT, CondBlockSetT>(potentialHeader, tailBlock,
@@ -427,9 +427,9 @@ void CondTreeInfoBase<BlockT, CondBlockSetT>
 	const DomTreeNodeBase<BlockT> *domRoot = domTree.getRootNode();
 	for(auto domNode : post_order(domRoot)) {
 		BlockT *potentialHeader = domNode->getBlock();
-		//outs() << "POTENTIAL HEADER ";
+		//errs() << "POTENTIAL HEADER ";
 		//potentialHeader->printAsOperand(errs(), false);
-		//outs() << "\n";
+		//errs() << "\n";
 
 	// The terminator must be a branch or else move on to some other block
 		auto *term_inst = potentialHeader->getTerminator();
@@ -449,10 +449,10 @@ void CondTreeInfoBase<BlockT, CondBlockSetT>
 	// In this case, the potential  header will dominate only one child. There
 	// MIGHT BE A TAIL.
 		if(domNode->getNumChildren() < 2) {
-			outs() << "DOM TREE NUMBER OF CHILDREN == 0 or 1\n";
-			outs() << "POTENTIAL HEADER: ";
+			errs() << "DOM TREE NUMBER OF CHILDREN == 0 or 1\n";
+			errs() << "POTENTIAL HEADER: ";
 			potentialHeader->printAsOperand(errs(), false);
-			outs() << "\n";
+			errs() << "\n";
 			//tailBlock = nullptr;
 			if(!domTree.dominates(term_inst->getSuccessor(0), potentialHeader)
 			&& !domTree.dominates(term_inst->getSuccessor(1), potentialHeader)) {
@@ -466,7 +466,7 @@ void CondTreeInfoBase<BlockT, CondBlockSetT>
 	// header is expected to have three children tops. If there are only two
 	// children, then one of the successors should be the tail.
 		if(domNode->getNumChildren() == 2) {
-			outs() << "DOM TREE NUMBER OF CHILDREN == 2\n";
+			errs() << "DOM TREE NUMBER OF CHILDREN == 2\n";
 			FindingCondBlockSets<BlockT, CondBlockSetT>
 							(potentialHeader, condBlockSetVect, domTree, this);
 			continue;
@@ -474,7 +474,7 @@ void CondTreeInfoBase<BlockT, CondBlockSetT>
 
 	// POTENTIAL DIAMOND CASE: There is one tail.
 		if(domNode->getNumChildren() == 3) {
-			outs() << "DOM TREE NUMBER OF CHILDREN == 3\n";
+			errs() << "DOM TREE NUMBER OF CHILDREN == 3\n";
 		// Find the node corresponding to the tail
 			size_t index = 0;
 			while(index != domNode->getNumChildren()) {
@@ -502,7 +502,7 @@ void CondTreeInfoBase<BlockT, CondBlockSetT>
 
 // Now, we discover all the top-level condblocks by checking whether they have
 // a parent or not and std::map blocks with the inner-most condBlocksets.
-	outs() << "TOP LEVEL ADD\n";
+	errs() << "TOP LEVEL ADD\n";
 	typename std::vector<CondBlockSetT *>::iterator set_it = condBlockSetVect.begin();
 	while(set_it != condBlockSetVect.end()) {
 		if(!(*set_it)->getParentCondBlockSet()) {
@@ -522,17 +522,17 @@ template<class BlockT, class CondBlockSetT>
 void CondTreeInfoBase<BlockT, CondBlockSetT>
 	  ::addTopLevelCondBlockSet(CondBlockSetT *blockSet,
 								const DominatorTreeBase<BlockT, false> &domTree) {
-	outs() << "ADDING TOP LEVEL CONDBLOCK SET\n";
+	errs() << "ADDING TOP LEVEL CONDBLOCK SET\n";
 	assert(blockSet && "Error: Cannot add a null top-level conblock set\n");
 
 // Map tails to the head of the condblock set
 	if(blockSet->getTail()) {
-		outs() << "TOP LEVEL TAIL: ";
+		errs() << "TOP LEVEL TAIL: ";
 		blockSet->getTail()->printAsOperand(errs(), false);
-		outs() << "\n";
+		errs() << "\n";
 		if(const BlockT *tail = blockSet->getTail()) {
 			TopLevelTailsToHeadsMap[tail] = const_cast<BlockT *>(blockSet->getHeader());
-			outs() << "TAIL MAPPED\n";
+			errs() << "TAIL MAPPED\n";
 		}
 	}
 
@@ -701,7 +701,7 @@ CondTreeInfoBase<BlockT, CondBlockSetT>::getCondBlockSetsInPreorder()  {
 		it++;
 	}
 	//printCondBlockSetsVector(preorderCondBlockSets);
-	//outs() << "PREORDER CONDBLOCK SETS VECTOR LENGTH:" << preorderCondBlockSets.size() << "\n";
+	//errs() << "PREORDER CONDBLOCK SETS VECTOR LENGTH:" << preorderCondBlockSets.size() << "\n";
 	return preorderCondBlockSets;
 }
 
