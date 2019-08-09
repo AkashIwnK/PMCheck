@@ -19,7 +19,6 @@
 #include "llvm/Analysis/PostDominators.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/GraphTraits.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Instruction.h"
@@ -28,7 +27,6 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/ADT/STLExtras.h"
@@ -84,14 +82,6 @@ static uint32_t ComputeRefIDPrefix(const std::string FuncName) {
 	return ((Hash % MAX_PREFIX) << 16);
 }
 
-static ConstantInt *GetLineNumber(Instruction *I) {
-	if(MDNode *N = I->getMetadata("dbg")) {
-		if(DILocation *Loc = dyn_cast<DILocation>(N))
-			return ConstantInt::get(Type::getInt32Ty(I->getContext()), Loc->getLine());
-	}
-	return nullptr;
-}
-
 static void InstrumentWrite(Instruction *I, LLVMContext &Context,
 	 													const PMInterfaces<> &PMI, const DataLayout &DL,
 														TargetLibraryInfo &TLI, Function *Strlen,
@@ -113,7 +103,11 @@ static void InstrumentWrite(Instruction *I, LLVMContext &Context,
 	new StoreInst(NewIndex, WriteIndex, I);
 
 // Compute the ID for this instruction
-	auto Id = InstToIdMap[I] = RefIDPrefix + InstCounter++;
+	auto Id = RefIDPrefix + InstCounter++;
+	//InstToIdMap[I] = Id;
+	InstToIdMap.insert(std::make_pair(I, Id));
+	errs() << "MAP UPDATED\n";
+	errs() << "MAP SIZE: " << InstToIdMap.size() << "\n";
 
 // Index the ID into the write arrays
 	std::vector<Value *> IndexVect;
@@ -216,7 +210,11 @@ static void InstrumentFlush(Instruction *I, LLVMContext &Context,
 	new StoreInst(NewIndex, FlushIndex, I);
 
 // Compute the ID for this instruction
-	auto Id = InstToIdMap[I] = RefIDPrefix + InstCounter++;
+	auto Id = RefIDPrefix + InstCounter++;
+	//InstToIdMap[I] = Id;
+	InstToIdMap.insert(std::make_pair(I, Id));
+	errs() << "MAP UPDATED\n";
+	errs() << "MAP SIZE: " << InstToIdMap.size() << "\n";
 
 // Index the ID into the write arrays
 	std::vector<Value *> IndexVect;
@@ -343,9 +341,10 @@ static void InstrumentForPMModelVerifier(Function *F,
 		GenLoop *L = GI.getLoopFor(SerialInsts[0]->getParent());
 		Instruction *PrevInstrumentedInst = nullptr;
 		for(auto *I : SerialInsts) {
-			InstrumentWrite(I, Context, PMI, DL, TLI, Strlen, WriteIdArray, WriteAddrArray,
-											WriteSizeArray, WriteIndex, InstToIdMap, RefIDPrefix,
-											InstCounter);
+			InstrumentWrite(I, Context, PMI, DL, TLI, Strlen, WriteIdArray,
+											WriteAddrArray, WriteSizeArray, WriteIndex, InstToIdMap,
+											RefIDPrefix, InstCounter);
+			errs() << "--MAP SIZE: " << InstToIdMap.size() << "\n";
 			if(L != GI.getLoopFor(I->getParent())) {
 			// Since this is a different loop, record the write
 				PrevInstrumentedInst = I;
@@ -371,8 +370,9 @@ static void InstrumentForPMModelVerifier(Function *F,
 		Instruction *PrevInstrumentedInst = nullptr;
 		for(auto *I : SerialInsts) {
 			InstrumentFlush(I, Context, PMI, DL, FlushIdArray, FlushAddrArray,
-											FlushSizeArray, FlushIndex, InstToIdMap, RefIDPrefix,
-											InstCounter);
+											FlushSizeArray, FlushIndex, InstToIdMap,
+											RefIDPrefix, InstCounter);
+			errs() << "--MAP SIZE: " << InstToIdMap.size() << "\n";
 			if(L != GI.getLoopFor(I->getParent())) {
 			// Since this is a different loop, record the write
 				PrevInstrumentedInst = I;
@@ -395,7 +395,9 @@ static void InstrumentForPMModelVerifier(Function *F,
 		Fence->print(errs());
 		errs() << "\n";
 	// Assign a static ID to the fence
-		auto Id = InstToIdMap[Fence] = RefIDPrefix + InstCounter++;
+		auto Id = RefIDPrefix + InstCounter++;
+		InstToIdMap.insert(std::make_pair(Fence, Id));
+		errs() << "MAP SIZE: " << InstToIdMap.size() << "\n";
 		errs() << "FENCE ID: " << Id << "\n";
 
 	// Instrument now
@@ -406,11 +408,12 @@ static void InstrumentForPMModelVerifier(Function *F,
 		errs() << "FENCE INSTRUMENTED\n";
 	}
 	errs() << "ALL FENCES INSTRUMENTED\n";
+	errs() << "+++MAP SIZE: " << InstToIdMap.size() << "\n";
 	F->print(errs());
 }
 
 static void DefineConstructor(Module &M, LLVMContext &Context,
-							 std::map<uint32_t, uint64_t> &InstIdToLineNoMap) {
+							 								DenseMap<uint32_t, uint64_t> &InstIdToLineNoMap) {
 	errs() << "DEFINING CONSTRUCTOR NOW\n";
 // Add constructor
 	std::vector<Type *> TypeVect;
@@ -431,12 +434,14 @@ static void DefineConstructor(Module &M, LLVMContext &Context,
 
 // The condblock registers all instruction IDs and their line numbers with the runtime.
 // First allocate two arrays: one to put instruction IDs and another for line numbers.
+	errs() << "ENTRY BLOCK ADDED\n";
 	uint64_t NumInsts = InstIdToLineNoMap.size();
 	auto *ArraySize = ConstantInt::get(Type::getInt64Ty(Context), NumInsts);
 	auto *IdArray =
 			new AllocaInst(Type::getInt32Ty(Context), 0, ArraySize, 0, "", EntryBlock);
 	auto *LineArray =
 			new AllocaInst(Type::getInt64Ty(Context), 0, ArraySize, 0, "", EntryBlock);
+	errs() << "ALLOCAS INSERTED\n";
 	uint64_t Index = 0;
 	auto *Zero = ConstantInt::get(Type::getInt8Ty(Context), 0);
 	std::vector<Value *> IndexVect;
@@ -455,8 +460,8 @@ static void DefineConstructor(Module &M, LLVMContext &Context,
 		IndexVect.pop_back();
 
 	// Insert IDs and corresponding line numbers
-		auto ConstantId = ConstantInt::get(Type::getInt64Ty(Context), Pair.first);
-		auto ConstantLine = ConstantInt::get(Type::getInt64Ty(Context), Pair.second);
+		auto ConstantId = ConstantInt::get(Type::getInt64Ty(Context), Pair.getFirst());
+		auto ConstantLine = ConstantInt::get(Type::getInt64Ty(Context), Pair.getSecond());
 		new StoreInst(ConstantId, IdIndexedPtr, EntryBlock);
 		new StoreInst(ConstantLine, LineIndexedPtr, EntryBlock);
 	}
@@ -544,7 +549,7 @@ bool InstrumentationPass::runOnFunction(Function &F) {
 		return false;
 
 	errs() << "RUNNING INSTRUMENTER\n";
-	DenseMap<const Instruction *, uint32_t> InstToIDMap;
+	DenseMap<const Instruction *, uint32_t> InstToIdMap;
 
 	//if(PMAnalysis) {
 	// Get PM Model info
@@ -569,9 +574,31 @@ bool InstrumentationPass::runOnFunction(Function &F) {
 		errs() << "\n";
 	}
 
-	InstrumentForPMModelVerifier(&F, FencesVect, PerfCheckerWriteInfo, PerfCheckerFlushInfo,
-															 InstToIDMap, PMI, TLI, GI, FenceEncountered,
+	InstrumentForPMModelVerifier(&F, FencesVect, PerfCheckerWriteInfo,
+															 PerfCheckerFlushInfo, InstToIdMap,
+															 PMI, TLI, GI, FenceEncountered,
 															 RecordNonStrictWrites, RecordFlushes, Strlen);
+
+// Get line number of an instruction
+	LLVMContext &Context = F.getContext();
+	auto GetLineNumber = [&Context](const Instruction *I) {
+		if(MDNode *N = I->getMetadata("dbg")) {
+		if(DILocation *Loc = dyn_cast<DILocation>(N))
+			return ConstantInt::get(Type::getInt32Ty(Context), Loc->getLine());
+		}
+		return (ConstantInt *)nullptr;
+	};
+
+	errs() << "MAP SIZE: " << InstToIdMap.size() << "\n";
+	for(auto &InstToIdPair : InstToIdMap) {
+		ConstantInt *CI = GetLineNumber(InstToIdPair.getFirst());
+		InstIdToLineNoMap.insert(std::make_pair(InstToIdPair.getSecond(),
+																						CI->getSExtValue()));
+		errs() << "ID: " << InstToIdPair.getSecond() << " ";
+		errs() << "Line: " << CI->getSExtValue() << "\n";
+	}
+
+	errs() << "DONE\n";
 	//}
 	return true;
 }
