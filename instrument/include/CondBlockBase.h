@@ -87,7 +87,7 @@ public:
 	const BlockT *getHeader() const {
 		return Header;
 	}
-	
+
 	const BlockT *getTail() const {
 		return Tail;
 	}
@@ -153,7 +153,7 @@ public:
 		}
 		return false;
 	}
-	
+
 	bool contains(const BlockT *block) const {
 		if(find(CondBlocks.begin(), CondBlocks.end(), block) == CondBlocks.end())
 			return false;
@@ -174,21 +174,21 @@ public:
 		return false;
 	}
 
-// Gets the condition for the condblock set	
+// Gets the condition for the condblock set
 	Value *getCondition() const {
 		return Header->getTerminator()->getOperand(0);
 	}
-	
+
 	bool executesWhenConditionIsTrue() const {
 		return contains(dyn_cast<BlockT>(Header->getTerminator()->getSuccessor(0)));
 	}
-	
+
 	bool strictlyContainsCondBlockSet(const CondBlockSetT *) const;
 
 	void addSubCondBlockSet(CondBlockSetT *blockset) {
 		SubCondBlockSets.push_back(blockset);
 	}
-	
+
 	void addChildCondBlockSet(CondBlockSetT *condBlockSet) {
 		assert(condBlockSet && "Error: A null condBlock set cannot be added.");
 		condBlockSet->ParentCondBlockSet = static_cast<CondBlockSetT *>(this);
@@ -265,68 +265,68 @@ public:
 	void printCondBlockSet() {
 	  // Print header of the condblock set even though it is not a part of condblock
 	  // set per se.
-		outs() << "******************* PRINTING CONDBLOCKS *********************\n";
+		errs() << "******************* PRINTING CONDBLOCKS *********************\n";
 		if(!Header) {
-		  outs() << "NO HEADER EXISTS\n";
+		  errs() << "NO HEADER EXISTS\n";
 		} else {
-		  outs() << "HEADER: ";
+		  errs() << "HEADER: ";
 		  Header->printAsOperand(errs(), false);
-		  outs() << "\n";
+		  errs() << "\n";
 		}
 
 	  // Print condblocks
 		if(CondBlocks.empty()) {
-			outs() << "NO CONDBLOCKS EXIST IN CONDBLOCK SET\n";
+			errs() << "NO CONDBLOCKS EXIST IN CONDBLOCK SET\n";
 		} else {
-		  outs() << "CONDBLOCKS: ";
+		  errs() << "CONDBLOCKS: ";
 		  typename std::vector<BlockT *>::iterator it = CondBlocks.begin();
 		  while(it != CondBlocks.end()) {
 			  (*it)->printAsOperand(errs(), false);
-			  outs() << " ";
+			  errs() << " ";
 			  it++;
 		  }
-		  outs() << "\n";
+		  errs() << "\n";
 		}
 
 	  // Print tail of the condblock set
 		if(!Tail) {
-		  outs() << "NO TAIL EXISTS\n";
+		  errs() << "NO TAIL EXISTS\n";
 		} else {
-		  outs() << "TAIL: ";
+		  errs() << "TAIL: ";
 		  Tail->printAsOperand(errs(), false);
-		  outs() << "\n";
+		  errs() << "\n";
 		}
-		outs() << "***************************************************************\n";
+		errs() << "***************************************************************\n";
 	}
 
 // Print the blocks in the subsets of this condblock set
 	void printSubCondBlockSets() {
 		if(SubCondBlockSets.empty()) {
-			outs() << "NO SUB-CONDBLOCK SET EXISTS!\n";
+			errs() << "NO SUB-CONDBLOCK SET EXISTS!\n";
 			return;
 		}
-		outs() << "===================== PRINTING CONDBLOCK SUBSET ===============\n";
+		errs() << "===================== PRINTING CONDBLOCK SUBSET ===============\n";
 		typename std::vector<CondBlockSetT *>::iterator it = SubCondBlockSets.begin();
 		while(it != SubCondBlockSets.end()) {
 			(*it)->printCondBlockSet();
 			it++;
 		}
-		outs() << "==============================================================\n";
+		errs() << "==============================================================\n";
 	}
 
 	void printParentCondBlockSet() {
 	// Print parent
 		if(!ParentCondBlockSet) {
-			outs() << "NO PARENT CONDBLOCK SET EXISTS!\n";
+			errs() << "NO PARENT CONDBLOCK SET EXISTS!\n";
 			return;
 		}
-		outs() << "================= PRINTING PARENT CONDBLOCK SET ==============\n";
+		errs() << "================= PRINTING PARENT CONDBLOCK SET ==============\n";
 		ParentCondBlockSet->printCondBlockSet();
-		outs() << "=============================================================\n";
+		errs() << "=============================================================\n";
 	}
 
 	virtual void printCondBlockSetInfo() {
-		outs() << "*************** PRINTING CONDBLOCK SET INFO *****************\n";
+		errs() << "*************** PRINTING CONDBLOCK SET INFO *****************\n";
 
 	// Print the condblock set whose parent needs printing
 		printCondBlockSet();
@@ -336,7 +336,7 @@ public:
 
 	// Print the subcondblock sets
 		printSubCondBlockSets();
-		outs() << "*************************************************************\n";
+		errs() << "*************************************************************\n";
 	}
 };
 
@@ -362,7 +362,7 @@ class CondTreeInfoBase {
 
 // Map tails of condblock tails to the condblock sets heads
 	DenseMap<const BlockT *, BlockT *> TopLevelTailsToHeadsMap;
-	
+
 	const CondTreeInfoBase<BlockT, CondBlockSetT> &
 		operator=(CondTreeInfoBase<BlockT, CondBlockSetT> &) = delete;
 
@@ -382,15 +382,15 @@ public:
 		CondBlockSetsPairMap.shrink_and_clear();
 	}
 	*/
-	
+
 	CondBlockSetT *AllocateCondBlockSet() {
 		return new CondBlockSetT();
 	}
-	
+
 	std::vector<CondBlockSetT *> &getTopLevelCondBlockSets() const {
 		return TopLevelCondBlockSets;
 	}
-	
+
 	BlockT *getHeaderForTopLevelTail(const BlockT *tail) const {
 		return TopLevelTailsToHeadsMap.lookup(tail);
 	}
@@ -408,20 +408,20 @@ public:
 	void addTopLevelCondBlockSet(CondBlockSetT *blockset) {
 	// Add top level condblock set
 		TopLevelCondBlockSets.push_back(blockset);
-		
+
 	// Map tails to the head of the condblock set
 		if(blockset->getTail()) {
-			outs() << "TOP LEVEL TAIL: ";
+			errs() << "TOP LEVEL TAIL: ";
 			blockset->getTail()->printAsOperand(errs(), false);
-			outs() << "\n";
+			errs() << "\n";
 			if(const BlockT *tail = blockset->getTail()) {
-				TopLevelTailsToHeadsMap[tail] = 
+				TopLevelTailsToHeadsMap[tail] =
 						const_cast<BlockT *>(blockset->getHeader());
-				outs() << "TAIL MAPPED\n";
+				errs() << "TAIL MAPPED\n";
 			}
 		}
 	}
-	
+
 	uint64_t getNumTopLevelCondBlockSets() const {
 		return TopLevelCondBlockSets.size();
 	}
@@ -430,9 +430,9 @@ public:
 	// Add the block and blockset pair in the map
 		CondBlockSetBlockMap[block] = blockset;
 	}
-	
+
 	void addToMap(BlockT *head, const BlockT *tail) {
-	// Add the head to the tail map	
+	// Add the head to the tail map
 		TopLevelTailsToHeadsMap[tail] = head;
 	}
 
@@ -440,7 +440,7 @@ public:
 	CondBlockSetT *getCondBlockSetFor(const BlockT *block) const {
 		return CondBlockSetBlockMap.lookup(block);
 	}
-	
+
 	void changeCondBlockSetFor(BlockT *block, CondBlockSetT *condBlockSet) {
 		if(!condBlockSet)
 			CondBlockSetBlockMap.erase(block);
@@ -462,7 +462,7 @@ public:
 							 CondBlockSetT *condBlockSet) {
 		CondBlockSetsPairMap[condBlockSetKey] = condBlockSet;
 	}
-	
+
 	void addCondBlockSetPair(const CondBlockSetT *condBlockSet1,
 							 const CondBlockSetT *condBlockSet2) {
 		CondBlockSetsPairMap[condBlockSet1] = const_cast<CondBlockSetT *>(condBlockSet2);
@@ -472,9 +472,9 @@ public:
 	bool isCondBlockSetHeader(const BlockT *potentialHeader) const {
 		return getCondBlockSetForHeader(potentialHeader) != nullptr;
 	}
-	
+
 	CondBlockSetT *getCondBlockSetForHeader(const BlockT *potentialHeader) const;
-	
+
 	bool isCondBlockSetTail(const BlockT *) const;
 
 // Function for pre-ordering the condBlocksets
@@ -510,15 +510,15 @@ public:
 	void printTopLevelCondBlockSets() {
 		iterator it = begin();
 		if(it == end()) {
-			outs() << "NO TOP LEVEL CONDBLOCK SETS EXIST\n";
+			errs() << "NO TOP LEVEL CONDBLOCK SETS EXIST\n";
 			return;
 		}
-		outs() << "============== PRINTING TOP-LEVEL CONDBLOCK SETS ============\n";
+		errs() << "============== PRINTING TOP-LEVEL CONDBLOCK SETS ============\n";
 		while(it != end()) {
 			(*it)->printCondBlockSet();
 			it++;
 		}
-		outs() << "=============================================================\n";
+		errs() << "=============================================================\n";
 	}
 
 	CondBlockSetT *getPartnerCondBlockSet(const CondBlockSetT *condBlockSet) const {
@@ -543,13 +543,13 @@ public:
 // Print a vector of condblocksets
 	void printCondBlockSetVector(
 							const std::vector<CondBlockSetT *> &condBlockSetsVect) {
-		outs() << "=========== PRINTING CONDBLOCK SETS VECTOR =================\n";
+		errs() << "=========== PRINTING CONDBLOCK SETS VECTOR =================\n";
 		typename std::vector<CondBlockSetT *>::const_iterator it = condBlockSetsVect.begin();
 		while(it != condBlockSetsVect.end()) {
 			(*it)->printCondBlockSetInfo();
 			it++;
 		}
-		outs() << "==============================================================\n";
+		errs() << "==============================================================\n";
 	}
 };
 
