@@ -256,7 +256,7 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 												 SCCToInstsPairVectTy &SCCToFlushesPairVect,
 												 SmallVector<BasicBlock *, 4> &BBWithFirstSerialWrites,
 												 SmallVector<BasicBlock *, 4> &BBWithFirstSerialFlushes,
-												 std::vector<Instruction *> &FencesVect,
+												 SmallVector<Instruction *, 4> &FencesVect,
 												 DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
 												 SmallVector<Value *, 16> &StackAndGlobalVarVect,
 												 AAResults &AA, TargetLibraryInfo &TLI, bool StrictModel) {
@@ -277,7 +277,7 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 		Instruction *Inst = &I;
 		if(StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
 			Inst->print(errs());
-			std::cout << "\n";
+			errs() << "\n";
 		// Make sure that the store instruction is not writing
 		// to stack or global variable. Even partial alias means
 		// that the write to stack or globals partially, so that counts.
@@ -290,7 +290,7 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 		}
 		if(CallInst *CI = dyn_cast<CallInst>(Inst)) {
 			Inst->print(errs());
-			std::cout << "\n";
+			errs() << "\n";
 
 		// Ignore most of the target library calls
 			bool IsLibMemCall = false;
@@ -411,6 +411,7 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 					if(!InterveningFence && !SCCIterator.hasLoop())
 						BBWithFirstSerialFlushes.push_back(BB);
 				}
+				errs() << "FENCE PUSHED\n";
 				FencesVect.push_back(CI);
 				FenceStop = true;
 				InterveningFence = true;
@@ -432,6 +433,7 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 				SF.clear();
 				if(!InterveningFence && !SCCIterator.hasLoop())
 					BBWithFirstSerialFlushes.push_back(BB);
+				errs() << "FENCE PUSHED\n";
 				FencesVect.push_back(CI);
 				FenceStop = true;
 				InterveningFence = true;
@@ -478,7 +480,7 @@ static void GroupSerialInstsInSCC(Function *F,  GenCondBlockSetLoopInfo &GI,
 																  SCCToInstsPairVectTy &FenceFreeSCCToFlushesPairVect,
 																  SmallVector<BasicBlock *, 4> &BBWithFirstSerialWrites,
 																  SmallVector<BasicBlock *, 4> &BBWithFirstSerialFlushes,
-																  std::vector<Instruction *> &FencesVect,
+																  SmallVector<Instruction *, 4> &FencesVect,
 																  DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
 																  SmallVector<Value *, 16> &StackAndGlobalVarVect,
 																	bool StrictModel = false) {
@@ -549,6 +551,11 @@ static void GroupSerialInstsInSCC(Function *F,  GenCondBlockSetLoopInfo &GI,
 			}
 		}
 	}
+
+	errs() << "PRINTING FENCES AFTER GROUPING:\n";
+	for(auto *Fence : FencesVect)
+		Fence->print(errs());
+	errs() << "\n";
 }
 
 static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &GI,
@@ -567,13 +574,6 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 	auto &MPI = PMI.getMapInterface();
 	auto &UI = PMI.getUnmapInterface();
 
-// Get all the globals
-	for(Module::global_iterator It = F->getParent()->global_begin();
-						It != F->getParent()->global_end(); It++) {
-		if(GlobalVariable *GV = dyn_cast<GlobalVariable>(&*It))
-			StackAndGlobalVarVect.push_back(GV);
-	}
-
 // Iterate over the function quickly to let all allocas. At the sane time
 // we try to get some simple "complete" sets of persistency operations that
 // comply with some specific persistency model. We record all the compile-time
@@ -587,10 +587,10 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 	// Skip block if it is in a loop
 		if(GI.getLoopFor(&BB)
 		|| GI.getCondBlockSetFor(&BB)) {
-			errs() << "SKIPPING BLOCK: ";
-			BB.printAsOperand(errs(), false);
-			GI.getCondBlockSetFor(&BB)->printCondBlockSetInfo();
-			errs() << "\n";
+			//errs() << "SKIPPING BLOCK: ";
+			//BB.printAsOperand(errs(), false);
+			//GI.getCondBlockSetFor(&BB)->printCondBlockSetInfo();
+			//errs() << "\n";
 		// Drop the collected sets and move on
 			SF.clear();
 			SW.clear();
@@ -611,7 +611,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 
 			if(StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
 				Inst->print(errs());
-				std::cout << "\n";
+				errs() << "\n";
 			// Make sure that the store instruction is not writing
 			// to stack or global variable. Even partial alias means
 			// that the write to stack or globals partially, so that counts.
@@ -624,7 +624,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 
 			if(CallInst *CI = dyn_cast<CallInst>(Inst)) {
 				Inst->print(errs());
-				std::cout << "\n";
+				errs() << "\n";
 
 			// Ignore most of the target library calls
 				bool IsLibMemCall = false;
@@ -689,6 +689,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 
 			// Pure fence
 				if(!IsLibMemCall && !IsMemIntrinsic && DI.isValidInterfaceCall(CI)) {
+					errs() << "PURE FENCE\n";
 				// Ignore the first fence
 					if(StartFence) {
 						TPR.addWritesAndFlushes(SW, SF);
@@ -712,6 +713,7 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 
 			// Flush and fence
 				if(!IsLibMemCall && !IsMemIntrinsic && PI.isValidInterfaceCall(CI)) {
+					errs() << "FENCE AND FLUSH HERE\n";
 					if(StartFence) {
 						SF.push_back(CI);
 						TPR.addWritesAndFlushes(SW, SF);
@@ -764,7 +766,6 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 				SFC.clear();
 				StartFence = false;
 				InterveningWriteOrFlush = true;
-				continue;
 			}
 		}
 	}
@@ -773,7 +774,8 @@ static void GetGlobalsAndStackVarsAndTPR(Function *F, GenCondBlockSetLoopInfo &G
 static void PopulateSerialInstsInfo(Function *F, GenCondBlockSetLoopInfo &GI,
 																  	DominatorTree &DT, AAResults &AA,
 																		TargetLibraryInfo &TLI,
-																		std::vector<Instruction *> &FencesVect,
+																		SmallVector<Value *, 16> &GlobalVarVect,
+																		SmallVector<Instruction *, 4> &FencesVect,
 																		PMInterfaces<> &PMI,
 																		PerfCheckerInfo<> &WritePCI,
 																		PerfCheckerInfo<> &FlushPCI) {
@@ -790,6 +792,7 @@ static void PopulateSerialInstsInfo(Function *F, GenCondBlockSetLoopInfo &GI,
 	bool StrictModel = false;
 
 // Get the globals and stack variables
+	StackAndGlobalVarVect.append(GlobalVarVect.begin(), GlobalVarVect.end());
 	GetGlobalsAndStackVarsAndTPR(F, GI, AA, TLI, PMI, TPR, StackAndGlobalVarVect);
 
 // Now we need to iterate over the strongly connected components in
@@ -914,9 +917,9 @@ static void PopulateSerialInstsInfo(Function *F, GenCondBlockSetLoopInfo &GI,
 
 // Merge collections
 	SCCToWritesPairVect.append(FenceFreeSCCToWritesPairVect.begin(),
-							   FenceFreeSCCToWritesPairVect.end());
+							   						 FenceFreeSCCToWritesPairVect.end());
 	SCCToFlushesPairVect.append(FenceFreeSCCToFlushesPairVect.begin(),
-								FenceFreeSCCToFlushesPairVect.end());
+															FenceFreeSCCToFlushesPairVect.end());
 
 // Now we iterate over the temporary records to look for problems and
 // print all of them.
@@ -942,6 +945,8 @@ INITIALIZE_PASS_BEGIN(ModelVerifierWrapperPass, "redundant-persist instructions-
                 	  														"Perform Check on Insts", true, true)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(GenCondBlockSetLoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(AAResultsWrapperPass)
 INITIALIZE_PASS_END(ModelVerifierWrapperPass, "redundant-persist instructions-check",
                	   														"Perform Check on Insts", true, true)
 
@@ -957,17 +962,29 @@ bool ModelVerifierWrapperPass::runOnFunction(Function &F) {
 	auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
 	auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 
-	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, FencesVect, PMI,  WritePCI, FlushPCI);
+	SmallVector<Instruction *, 4> FencesVect;
+	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, GlobalVarVect, FencesVectMap[&F], PMI,
+													WritePCI, FlushPCI);
 	errs() << "PRINTING WRITES:\n";
 	WritePCI.printFuncToSerialInstsSetMap();
 	errs() << "PRINTING FLUSHES:\n";
 	FlushPCI.printFuncToSerialInstsSetMap();
 	errs() << "PRINTING FENCES:\n";
-	for(auto *Fence : FencesVect) {
+	for(auto *Fence : FencesVectMap.lookup(&F)) {
 		Fence->print(errs());
 		errs() << "\n";
 	}
+	//FencesVectMap[&F].append(FencesVect.begin(), FencesVect.end());
 
+	return false;
+}
+
+bool ModelVerifierWrapperPass::doInitialization(Module &M) {
+// Get all the globals
+	for(auto It = M.global_begin(); It != M.global_end(); It++) {
+		if(GlobalVariable *GV = dyn_cast<GlobalVariable>(&*It))
+			GlobalVarVect.push_back(GV);
+	}
 	return false;
 }
 
@@ -983,7 +1000,9 @@ bool ModelVerifierPass::runOnFunction(Function &F) {
 	auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
 	auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 
-	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, FencesVect, PMI,  WritePCI, FlushPCI);
+	SmallVector<Instruction *, 4> FencesVect;
+	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, GlobalVarVect, FencesVectMap[&F], PMI,
+													WritePCI, FlushPCI);
 	errs() << "PRINTING WRITES:\n";
 	WritePCI.printFuncToSerialInstsSetMap();
 	errs() << "PRINTING FLUSHES:\n";
@@ -993,6 +1012,16 @@ bool ModelVerifierPass::runOnFunction(Function &F) {
 		Fence->print(errs());
 		errs() << "\n";
 	}
+	//FencesVectMap[&F].append(FencesVect.begin(), FencesVect.end());
 
+	return false;
+}
+
+bool ModelVerifierPass::doInitialization(Module &M) {
+// Get all the globals
+	for(auto It = M.global_begin(); It != M.global_end(); It++) {
+		if(GlobalVariable *GV = dyn_cast<GlobalVariable>(&*It))
+			GlobalVarVect.push_back(GV);
+	}
 	return false;
 }
