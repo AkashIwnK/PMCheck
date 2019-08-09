@@ -93,7 +93,7 @@ static ConstantInt *GetLineNumber(Instruction *I) {
 }
 
 static void InstrumentWrite(Instruction *I, LLVMContext &Context,
-	 													PMInterfaces<> &PMI, const DataLayout &DL,
+	 													const PMInterfaces<> &PMI, const DataLayout &DL,
 														TargetLibraryInfo &TLI, Function *Strlen,
 														AllocaInst *WriteIdArray, AllocaInst *WriteAddrArray,
 														AllocaInst *WriteSizeArray, Value *WriteIndex,
@@ -192,7 +192,7 @@ static void InstrumentWrite(Instruction *I, LLVMContext &Context,
 }
 
 static void InstrumentFlush(Instruction *I, LLVMContext &Context,
-	 													PMInterfaces<> &PMI, const DataLayout &DL,
+	 													const PMInterfaces<> &PMI, const DataLayout &DL,
 														AllocaInst *FlushIdArray, AllocaInst *FlushAddrArray,
 														AllocaInst *FlushSizeArray, Value *FlushIndex,
 														DenseMap<const Instruction *, uint32_t>  &InstToIdMap,
@@ -253,7 +253,7 @@ static void InstrumentForPMModelVerifier(Function *F,
 									PerfCheckerInfo<> &PerfCheckerWriteInfo,
 									PerfCheckerInfo<> &PerfCheckerFlushInfo,
 									DenseMap<const Instruction *, uint32_t>  &InstToIdMap,
-									PMInterfaces<> &PMI, TargetLibraryInfo &TLI,
+									const PMInterfaces<> &PMI, TargetLibraryInfo &TLI,
 									GenCondBlockSetLoopInfo &GI, Function *FenceEncountered,
 									Function *RecordNonStrictWrites, Function *RecordFlushes,
 									Function *Strlen) {
@@ -411,6 +411,7 @@ static void InstrumentForPMModelVerifier(Function *F,
 
 static void DefineConstructor(Module &M, LLVMContext &Context,
 							 std::map<uint32_t, uint64_t> &InstIdToLineNoMap) {
+	errs() << "DEFINING CONSTRUCTOR NOW\n";
 // Add constructor
 	std::vector<Type *> TypeVect;
 	auto *FuncType = FunctionType::get(Type::getVoidTy(Context),
@@ -421,7 +422,8 @@ static void DefineConstructor(Module &M, LLVMContext &Context,
 
 // Add a runtime library function to check if the constructor is supposed
 // to execute.
-	auto *RuntimeConsructorCheck = Function::Create(FuncType, GlobalValue::ExternalLinkage,
+	auto *RuntimeConsructorCheck = Function::Create(FuncType,
+																									GlobalValue::ExternalLinkage,
 																									"RuntimeConsructorCheck", &M);
 
 // Define the constructor now
@@ -481,6 +483,7 @@ static void DefineConstructor(Module &M, LLVMContext &Context,
 
 bool InstrumentationPass::doInitialization(Module &M) {
 	errs() << "INITIALIZING PASS\n";
+
 // Define the functions that we need to insert
 	auto &Context = M.getContext();
 	std::vector<Type *> TypeVect;
@@ -513,6 +516,7 @@ bool InstrumentationPass::doInitialization(Module &M) {
 	TypeVect.push_back(PointerType::get(Type::getInt8Ty(Context), 0));
 	FuncType = FunctionType::get(Type::getInt64Ty(Context),
 															 ArrayRef<Type *>(TypeVect), 0);
+
 	auto *StrlenCallee = M.getOrInsertFunction(StringRef("strlen"), FuncType);
 	Strlen = cast<Function>(StrlenCallee);
 	if(!Strlen) {
@@ -525,15 +529,19 @@ bool InstrumentationPass::doInitialization(Module &M) {
 }
 
 bool InstrumentationPass::doFinalization(Module &M) {
+	errs() << "PRINTING MODULE: ";
+	M.print(errs(), nullptr);
 // Now define the constructors and destructors
 	DefineConstructor(M, M.getContext(), InstIdToLineNoMap);
 	//DefineDestructor(M, Context);
+	errs() << "PRINTING MODULE AGAIN:";
+	M.print(errs(), nullptr);
 	return false;
 }
 
 bool InstrumentationPass::runOnFunction(Function &F) {
 	if(!F.size())
-		return true;
+		return false;
 
 	errs() << "RUNNING INSTRUMENTER\n";
 	DenseMap<const Instruction *, uint32_t> InstToIDMap;
@@ -546,18 +554,24 @@ bool InstrumentationPass::runOnFunction(Function &F) {
 	auto PerfCheckerFlushInfo =
 					getAnalysis<ModelVerifierWrapperPass>().getPerfCheckerFlushInfo();
 	errs() << "GOT PERF CHECKER FLUSH INFO\n";
-	auto FencesVect = getAnalysis<ModelVerifierWrapperPass>().getFencesInfoFor(&F);
-	errs() << "GOT FENCE VECTOR\n";
-	auto PMI = getAnalysis<ModelVerifierWrapperPass>().getPmemInterfaces();
+	auto &PMI = getAnalysis<ModelVerifierWrapperPass>().getPmemInterfaces();
 	errs() << "GOT MODEL VERIFIER RESULTS\n";
 	auto &GI =
 		getAnalysis<GenCondBlockSetLoopInfoWrapperPass>().getGenCondInfoWrapperPassInfo();
 	auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 	errs() << "GOT CONDBLOCK SET AND LOOP INFO\n";
 
+	auto FencesVect = getAnalysis<ModelVerifierWrapperPass>().getFencesInfoFor(&F);
+	errs() << "GOT FENCE VECTOR\n";
+	for(auto *Fence : FencesVect) {
+		errs() << "FENCE INST: ";
+		Fence->print(errs());
+		errs() << "\n";
+	}
+
 	InstrumentForPMModelVerifier(&F, FencesVect, PerfCheckerWriteInfo, PerfCheckerFlushInfo,
 															 InstToIDMap, PMI, TLI, GI, FenceEncountered,
 															 RecordNonStrictWrites, RecordFlushes, Strlen);
 	//}
-	return false;
+	return true;
 }
