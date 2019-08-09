@@ -78,7 +78,7 @@ void GenCondBlockSetBase<BlockT, LoopT, CondBlockSetT>
 template <class BlockT, class LoopT, class CondBlockSetT>
 void GenCondBlockSetLoopInfoBase<BlockT, LoopT, CondBlockSetT>
 	::bindCondBlockSetTreeToLoopTree(const DominatorTreeBase<BlockT, false> &domTree) {
-	outs() << "\n\n\n\n*********** BUILDING CONDBLOCKSET INFO IN CONDLOOP *************\n";
+	errs() << "\n\n\n\n*********** BUILDING CONDBLOCKSET INFO IN CONDLOOP *************\n";
 // Get the condloops in a pre-ordered vector
 	SmallVector<LoopT *, 4> condLoopsSmallVect =
 									LoopInfoBase<BlockT, LoopT>::getLoopsInPreorder();
@@ -105,13 +105,13 @@ void GenCondBlockSetLoopInfoBase<BlockT, LoopT, CondBlockSetT>
 		CondBlockSetT *parentCondBlockSet =
 				const_cast<CondBlockSetT *>(CondTreeInfoBase<BlockT, CondBlockSetT>
 												::getCondBlockSetFor((*loop)->getHeader()));
-		//outs() << "LOOP HEADER: ";
+		//errs() << "LOOP HEADER: ";
 		//((*condLoop)->getHeader())->printAsOperand(errs(), false);
-		//outs() << "\n";
+		//errs() << "\n";
 		(*loop)->setParentCondBlockSet(parentCondBlockSet);
-		//outs() << "INITIAL PARENT CONDBLOCK SET\n";
+		//errs() << "INITIAL PARENT CONDBLOCK SET\n";
 		//if(!parentCondBlockSet)
-			//outs() << "PARENT CONDBLOCK SET IS NULL\n";
+			//errs() << "PARENT CONDBLOCK SET IS NULL\n";
 		//else
 			//parentCondBlockSet->printCondBlocksInSet();
 		typename std::vector<BlockT *>::iterator block = loopBlocks.begin();
@@ -131,11 +131,11 @@ void GenCondBlockSetLoopInfoBase<BlockT, LoopT, CondBlockSetT>
 			block++;
 		}
 		//if(parentCondBlockSet) {
-			//outs() << "PARENT CONDBLOCK SET: ";
+			//errs() << "PARENT CONDBLOCK SET: ";
 			//parentCondBlockSet->printCondBlocksInSet();
-			//outs() << "\n";
+			//errs() << "\n";
 		//} else {
-			//outs() << "NO PARENT CONDBLOCK SET\n";
+			//errs() << "NO PARENT CONDBLOCK SET\n";
 		//}
 
 	// Find out the sub-condblock sets in this condloop by reverse traversing the CFG
@@ -147,16 +147,16 @@ void GenCondBlockSetLoopInfoBase<BlockT, LoopT, CondBlockSetT>
 			std::vector<CondBlockSetT *> subCondBlocksWorklist;
 			CondBlockSetT *subCondBlockSet =
 					const_cast<CondBlockSetT *>(this->getCondBlockSetFor(*block));
-			//outs() << "BLOCK CONSIDERED: ";
+			//errs() << "BLOCK CONSIDERED: ";
 			//if(!*block)
-				//outs() << "NULL";
+				//errs() << "NULL";
 			//else
 				//(*block)->printAsOperand(errs(), false);
-			//outs() << "\n";
+			//errs() << "\n";
 			//if(!subCondBlockSet) {
-				//outs() << "SUBCONDBLOCK SET IS NULL\n";
+				//errs() << "SUBCONDBLOCK SET IS NULL\n";
 			//} else {
-				//outs() << "SUBCONDBLOCK TO CONSIDER SET INFO: \n";
+				//errs() << "SUBCONDBLOCK TO CONSIDER SET INFO: \n";
 				//subCondBlockSet->printCondBlocksInSet();
 			//}
 			while(subCondBlockSet
@@ -164,16 +164,16 @@ void GenCondBlockSetLoopInfoBase<BlockT, LoopT, CondBlockSetT>
 			   && (*loop)->getNumBlocks() >= subCondBlockSet->getNumCondBlocks()) {
 				if(find(subCondBlocksWorklist.begin(), subCondBlocksWorklist.end(),
 											subCondBlockSet) == subCondBlocksWorklist.end()) {
-					//outs() << "PUT SUBCONDBLOCKSET IN WORKLIST\n";
+					//errs() << "PUT SUBCONDBLOCKSET IN WORKLIST\n";
 					//subCondBlockSet->printCondBlocksInSet();
 					subCondBlocksWorklist.push_back(subCondBlockSet);
 				}
 				subCondBlockSet = const_cast<CondBlockSetT *>(
 										subCondBlockSet->getParentCondBlockSet());
 				//if(!subCondBlockSet) {
-					//outs() << "SUBCONDBLOCK SET IS NULL\n";
+					//errs() << "SUBCONDBLOCK SET IS NULL\n";
 				//} else {
-					//outs() << "SUBCONDBLOCK TO CONSIDER SET INFO: \n";
+					//errs() << "SUBCONDBLOCK TO CONSIDER SET INFO: \n";
 					//subCondBlockSet->printCondBlocksInSet();
 				//}
 			}
@@ -202,11 +202,11 @@ void GenCondBlockSetLoopInfoBase<BlockT, LoopT, CondBlockSetT>
 			// This means that a subloop has been found, put it into the subloop vector
 			// for this condblock set if it has not been already.
 				if(!(*loop)->containsSubCondBlockSet(subCondBlockSet)) {
-					//outs() << "SUBCOND BLOCK SET ADDED: \n";
+					//errs() << "SUBCOND BLOCK SET ADDED: \n";
 					//subCondBlockSet->printCondBlocksInSet();
 					(*loop)->addSubCondBlockSet(subCondBlockSet);
 				}
-				//outs() << "BREAK\n";
+				//errs() << "BREAK\n";
 				break;
 
 			next_subCondBlockSet:  // Keep the compiler happy
@@ -214,14 +214,14 @@ void GenCondBlockSetLoopInfoBase<BlockT, LoopT, CondBlockSetT>
 			}
 			block++;
 		}
-		//outs() << "\n\n";
-		//outs() << "--------------------------------------------------------------------------\n";
+		//errs() << "\n\n";
+		//errs() << "--------------------------------------------------------------------------\n";
 		//(*condLoop)->printCondLoopInfo();
 		//(*condLoop)->printCondBlockSetInfo();
-		//outs() << "\n\n";
+		//errs() << "\n\n";
 		loop++;
 	}
-	outs() << "*****************************************************************************\n";
+	errs() << "*****************************************************************************\n";
 }
 
 template <class BlockT, class LoopT, class CondBlockSetT>
@@ -303,11 +303,11 @@ void GenCondBlockSetLoopInfoBase<BlockT, LoopT, CondBlockSetT>
 			}
 			block++;
 		}
-		//outs() << "\n\n";
-		//outs() << "--------------------------------------------------------------------------\n";
+		//errs() << "\n\n";
+		//errs() << "--------------------------------------------------------------------------\n";
 		//(*condBlockSet)->printCondBlockSetInfo();
 		//(*condBlockSet)->printLoopInfo();
-		//outs() << "\n\n";
+		//errs() << "\n\n";
 		condBlockSet++;
 	}
 }
@@ -381,11 +381,15 @@ void GenLoopBase<BlockT, LoopT, CondBlockSetT>
 // GenCondInfoWrapperPass Info
 
 char GenCondBlockSetLoopInfoWrapperPass::ID = 0;
+char GenCondBlockSetLoopInfoPass::ID = 0;
 
-INITIALIZE_PASS_BEGIN(GenCondBlockSetLoopInfoWrapperPass, 
+static RegisterPass<GenCondBlockSetLoopInfoPass> PassObj("LoopPass",
+																															"Run Loop Pass");
+
+INITIALIZE_PASS_BEGIN(GenCondBlockSetLoopInfoWrapperPass,
 					"genInfo", "Natural Loop Information", true, true)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
-INITIALIZE_PASS_END(GenCondBlockSetLoopInfoWrapperPass, 
+INITIALIZE_PASS_END(GenCondBlockSetLoopInfoWrapperPass,
 					"genInfo", "Natural Loop Information", true, true)
 
 bool GenCondBlockSetLoopInfoWrapperPass::runOnFunction(Function &) {
@@ -397,10 +401,19 @@ bool GenCondBlockSetLoopInfoWrapperPass::runOnFunction(Function &) {
 void GenCondBlockSetLoopInfoWrapperPass::getAnalysisUsage(AnalysisUsage &AU) const {
 	errs() << "LOOP DEP\n";
 	AU.addRequired<DominatorTreeWrapperPass>();
+	AU.setPreservesCFG();
 	AU.setPreservesAll();
 }
 
+bool GenCondBlockSetLoopInfoPass::runOnFunction(Function &) {
+	errs() << "ANALYZE\n";
+	GI.analyze(getAnalysis<DominatorTreeWrapperPass>().getDomTree());
+	return false;
+}
 
-
-
-
+void GenCondBlockSetLoopInfoPass::getAnalysisUsage(AnalysisUsage &AU) const {
+	errs() << "LOOP DEP\n";
+	AU.addRequired<DominatorTreeWrapperPass>();
+	AU.setPreservesCFG();
+	AU.setPreservesAll();
+}
