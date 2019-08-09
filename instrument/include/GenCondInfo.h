@@ -59,7 +59,7 @@ class GenCondBlockSetBase: public CondBlockSetBase<BlockT, CondBlockSetT> {
 			const GenCondBlockSetBase<BlockT, LoopT, CondBlockSetT> &) = delete;
 
 	friend class GenCondBlockSetLoopInfoBase<BlockT, LoopT, CondBlockSetT> ;
-	
+
 	/*
 	 ~GenCondBlockSetBase() {
 	 for(auto *subLoops : SubLoops)
@@ -97,15 +97,15 @@ public:
 			return false;
 		return true;
 	}
-	
+
 	bool contains(const LoopT *loop) const {
 		if(const CondBlockSetT *condBlockSet = loop->getParentCondBlockSet())
 			return contains(condBlockSet);
 		return false;
 	}
-	
+
 	using CondBlockSetBase<BlockT, CondBlockSetT>::contains;
-	
+
 	uint64_t getLoopDepth() const {
 		uint64_t depth = 1;
 		LoopT *loop = ParentLoop;
@@ -154,18 +154,18 @@ public:
 	}
 
 	void printParentLoop() {
-		outs() << "******************* PRINTING PARENT LOOP ***********************\n";
+		errs() << "******************* PRINTING PARENT LOOP ***********************\n";
 		if (ParentLoop)
 			ParentLoop->printLoop();
 		else
-			outs() << "NO PARENT LOOP\n";
-		outs() << "****************************************************************\n";
+			errs() << "NO PARENT LOOP\n";
+		errs() << "****************************************************************\n";
 	}
 
 	void printSubLoops() {
-		outs() << "*********************** PRINTING SUBLOOPS **********************\n";
+		errs() << "*********************** PRINTING SUBLOOPS **********************\n";
 		if (SubLoops.empty()) {
-			outs() << "NO SUBLOOPS EXIST\n";
+			errs() << "NO SUBLOOPS EXIST\n";
 		} else {
 			typename std::vector<LoopT *>::iterator subloop_it =
 					SubLoops.begin();
@@ -174,11 +174,11 @@ public:
 				subloop_it++;
 			}
 		}
-		outs() << "****************************************************************\n";
+		errs() << "****************************************************************\n";
 	}
 
 	virtual void printCondBlockSetInfo() {
-		outs() << "*************** PRINTING CONDBLOCK SET INFO ********************\n";
+		errs() << "*************** PRINTING CONDBLOCK SET INFO ********************\n";
 
 		// Print the condblock set whose parent needs printing
 		this->printCondBlockSet();
@@ -194,7 +194,7 @@ public:
 
 		// Print subloops
 		printSubLoops();
-		outs() << "****************************************************************\n";
+		errs() << "****************************************************************\n";
 	}
 };
 
@@ -256,7 +256,7 @@ public:
 	uint64_t getNumSubCondSets() const {
 		return SubCondBlockSets.size();
 	}
-	
+
 	void addSubCondBlockSet(const CondBlockSetT *condBlockSet) {
 		SubCondBlockSets.push_back(const_cast<CondBlockSetT *>(condBlockSet));
 	}
@@ -269,13 +269,13 @@ public:
 		}
 		return true;
 	}
-	
+
 	bool contains(const CondBlockSetT *condBlockSet) const {
 		if(const LoopT *loop = condBlockSet->getParentLoop())
 			return contains(loop);
 		return false;
 	}
-	
+
 	using LoopBase<BlockT, LoopT>::contains;
 
 // Iterators for sub-condblock sets and sub-condloops
@@ -342,65 +342,65 @@ public:
 
 // Print all the information about loops
 	void printLoop() {
-		outs() << "======================= PRINTING LOOP ==========================\n";
-		outs() << "LOOP HEADER: ";
+		errs() << "======================= PRINTING LOOP ==========================\n";
+		errs() << "LOOP HEADER: ";
 		BlockT *header = this->getHeader();
 		header->printAsOperand(errs(), false);
-		outs() << "\nLOOP BLOCKS: ";
+		errs() << "\nLOOP BLOCKS: ";
 		std::vector<BlockT *> loopBlocks = this->getBlocksVector();
 		typename std::vector<BlockT *>::const_iterator it = loopBlocks.begin();
 		while (it != loopBlocks.end()) {
 			if (*it != header)
 				(*it)->printAsOperand(errs(), false);
-			outs() << " ";
+			errs() << " ";
 			it++;
 		}
-		outs() << "\n==============================================================\n";
+		errs() << "\n==============================================================\n";
 	}
 
 	void printParentCondBlockSet() {
 		if (!ParentCondBlockSet) {
-			outs() << "NO PARENT CONDBLOCK SET EXISTS\n";
+			errs() << "NO PARENT CONDBLOCK SET EXISTS\n";
 			return;
 		}
-		outs() << "**************** PRINTING PARENT CONDBLOCK SET *****************\n";
+		errs() << "**************** PRINTING PARENT CONDBLOCK SET *****************\n";
 		ParentCondBlockSet->printCondBlockSet();
-		outs() << "****************************************************************\n";
+		errs() << "****************************************************************\n";
 	}
 
 	void printSubCondBlockSets() {
 		if (SubCondBlockSets.empty()) {
-			outs() << "NO SUBCONDBLOCK SETS EXIST\n";
+			errs() << "NO SUBCONDBLOCK SETS EXIST\n";
 			return;
 		}
-		outs() << "******************* PRINTING SUBCONDBLOCK SETS *****************\n";
+		errs() << "******************* PRINTING SUBCONDBLOCK SETS *****************\n";
 		typename std::vector<CondBlockSetT *>::iterator it =
 				SubCondBlockSets.begin();
 		while (it != SubCondBlockSets.end()) {
 			(*it)->printCondBlockSet();
 			it++;
 		}
-		outs() << "****************************************************************\n";
+		errs() << "****************************************************************\n";
 	}
 
 	void printParentLoop() {
-		outs() << "---------------------- PRINT PARENT LOOP -----------------------\n";
+		errs() << "---------------------- PRINT PARENT LOOP -----------------------\n";
 		this->getParentLoop()->printLoop();
-		outs() << "----------------------------------------------------------------\n";
+		errs() << "----------------------------------------------------------------\n";
 	}
 
 	void printSubLoops() {
-		outs() << "+++++++++++++++++++++ PRINT SUBLOOPS +++++++++++++++++++++++++++\n";
+		errs() << "+++++++++++++++++++++ PRINT SUBLOOPS +++++++++++++++++++++++++++\n";
 		typename LoopBase<BlockT, LoopT>::iterator it = this->begin();
 		while (it != this->end()) {
 			(*it)->printLoop();
 			it++;
 		}
-		outs() << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+		errs() << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
 	}
 
 	virtual void printLoopInfo() {
-		outs() << "===================== PRINTING CONDLOOP INFO ===================\n";
+		errs() << "===================== PRINTING CONDLOOP INFO ===================\n";
 
 		// Print this loop
 		printLoop();
@@ -416,7 +416,7 @@ public:
 
 		// Print sub-condblock sets
 		printSubCondBlockSets();
-		outs() << "================================================================\n";
+		errs() << "================================================================\n";
 	}
 };
 
@@ -480,17 +480,17 @@ public:
 	void analyze(const DominatorTreeBase<BlockT, false> &domTree) {
 		// Create loop and condblock set forests separately
 		//LoopInfoBase<BlockT, LoopT>::analyze(domTree);
-		
-		outs() << "----------- ANALYZING LOOP INFO -------------\n";
+
+		errs() << "----------- ANALYZING LOOP INFO -------------\n";
 		LoopInfoBase<BlockT, LoopT>::analyze(domTree);
 		//this->analyzeCondBlockSets(domTree);
-		
-		outs() << "----------- ANALYZING COND BLOCK SET INFO --------\n";
+
+		errs() << "----------- ANALYZING COND BLOCK SET INFO --------\n";
 		CondTreeInfoBase<BlockT, CondBlockSetT>::analyze(domTree);
-		
-		outs() << "--------------BIND CONDBLOCKSET INFO TO LOOP INFO----------\n";
+
+		errs() << "--------------BIND CONDBLOCKSET INFO TO LOOP INFO----------\n";
 		bindCondBlockSetTreeToLoopTree(domTree);
-		outs() << "--------------BIND LOOP INFO TO CONDBLOCKSET INFO ---------\n";
+		errs() << "--------------BIND LOOP INFO TO CONDBLOCKSET INFO ---------\n";
 		bindLoopTreeToCondBlockSetTree(domTree);
 	}
 
@@ -537,7 +537,7 @@ public:
 		LoopT *loop = LoopInfoBase<BlockT, LoopT>::getLoopFor(block);
 		return loop->isLoopExiting(block);
 	}
-	
+
 // Functions from Loop tree
 	using LoopInfoBase<BlockT, LoopT>::getLoopFor;
 	using LoopInfoBase<BlockT, LoopT>::addTopLevelLoop;
@@ -550,10 +550,10 @@ public:
 	using LoopInfoBase<BlockT, LoopT>::removeBlock;
 	using LoopInfoBase<BlockT, LoopT>::isNotAlreadyContainedIn;
 	using LoopInfoBase<BlockT, LoopT>::AllocateLoop;
-	
+
 	std::vector<LoopT *> getLoopsInPostorder() {
 	// Get the loops in preorder and reverse order the loops
-		SmallVector<LoopT *, 4> preorderedLoopsVect = 
+		SmallVector<LoopT *, 4> preorderedLoopsVect =
 				LoopInfoBase<BlockT, LoopT>::getLoopsInPreorder();
 		std::vector<LoopT *> postorderedLoopsVect;
 		while(!preorderedLoopsVect.empty()) {
@@ -562,7 +562,7 @@ public:
 		}
 		return postorderedLoopsVect;
 	}
-	
+
 // Functions from condblockset tree
 	 using CondTreeInfoBase<BlockT, CondBlockSetT>::isTopLevelCondBlockSet;
 	 using CondTreeInfoBase<BlockT, CondBlockSetT>::getCondBlockSetFor;
@@ -580,7 +580,7 @@ public:
 	 using CondTreeInfoBase<BlockT, CondBlockSetT>::AllocateCondBlockSet;
 	 using CondTreeInfoBase<BlockT, CondBlockSetT>::getCondBlockSetForHeader;
 	 using CondTreeInfoBase<BlockT, CondBlockSetT>::getHeaderForTopLevelTail;
-	 
+
 // Printing functions
 	void printCondBlockSetVector(
 					const std::vector<CondBlockSetT *> &condBlockSetsVect) {
@@ -596,14 +596,14 @@ public:
 	//using CondTreeInfoBase<BlockT, CondBlockSetT>::printTopLevelCondBlockSets;
 
 	void printTopLevelCondLoops() const {
-		outs() << "*************** PRINTING TOP LEVEL CONDLOOPS *******************\n";
+		errs() << "*************** PRINTING TOP LEVEL CONDLOOPS *******************\n";
 		typename LoopInfoBase<BlockT, LoopT>::iterator it = LoopInfoBase<BlockT,
 				LoopT>::begin();
 		while (it != LoopInfoBase<BlockT, LoopT>::end()) {
 			(*it)->printLoopInfo();
 			it++;
 		}
-		outs() << "****************************************************************\n";
+		errs() << "****************************************************************\n";
 	}
 };
 
@@ -624,30 +624,60 @@ class GenCondBlockSetLoopInfoWrapperPass : public FunctionPass {
 
 public:
 	static char ID; // Pass identification, replacement for typeid
- 
+
 	GenCondBlockSetLoopInfoWrapperPass() : FunctionPass(ID) {
 		errs() << "INIT ANALYZE\n";
 		initializeGenCondBlockSetLoopInfoWrapperPassPass(
 							*PassRegistry::getPassRegistry());
 	}
- 
-	GenCondBlockSetLoopInfo &getGenCondInfoWrapperPassInfo() { 
+
+	GenCondBlockSetLoopInfo &getGenCondInfoWrapperPassInfo() {
 		return GI;
 	}
 	const GenCondBlockSetLoopInfo &getGenCondInfoWrapperPassInfo() const {
 		return GI;
 	}
- 
+
 // Calculate the natural loop information for a given function.
 	bool runOnFunction(Function &F) override;
-	
+
 	void getAnalysisUsage(AnalysisUsage &AU) const override;
-	
+
 	bool doInitialization(Module &M) const {
 		errs() << "HERE\n";
 		return false;
 	}
-	
+
+	bool doFinalization(Module &M) const {
+		return false;
+	}
+};
+
+void initializeGenCondBlockSetLoopInfoPassPass(PassRegistry &);
+
+// The legacy pass manager's analysis pass to compute loop information.
+class GenCondBlockSetLoopInfoPass : public FunctionPass {
+	GenCondBlockSetLoopInfo GI;
+
+public:
+	static char ID; // Pass identification, replacement for typeid
+
+	GenCondBlockSetLoopInfoPass() : FunctionPass(ID) {
+		errs() << "INIT ANALYZE\n";
+		//initializeGenCondBlockSetLoopInfoWrapperPassPass(
+			//				*PassRegistry::getPassRegistry());
+	}
+
+// Calculate the natural loop information for a given function.
+	bool runOnFunction(Function &F) override;
+
+	void getAnalysisUsage(AnalysisUsage &AU) const override;
+
+	bool doInitialization(Module &M) const {
+		errs() << "HERE\n";
+		return false;
+	}
+
 	bool doFinalization(Module &M) const {
 		return false;
 	}
