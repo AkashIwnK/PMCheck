@@ -8,6 +8,7 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/ADT/DenseMap.h"
 
 #include <vector>
 
@@ -96,9 +97,9 @@ void TempPersistencyRecord<T>::printRecord() const {
 	errs() << "------------------ REDUNDANT FENCES RECORDED-------------------\n";
 }
 
-//--------------------------------------------------------------------------------------//
+//----------------------------------------------------------------------------//
 // Passes for the getting flush sets
-//--------------------------------------------------------------------------------------//
+//----------------------------------------------------------------------------//
 
 void initializeModelVerifierPassPass(PassRegistry &);
 
@@ -106,7 +107,9 @@ class ModelVerifierPass : public FunctionPass {
 	PerfCheckerInfo<> WritePCI;
 	PerfCheckerInfo<> FlushPCI;
 	PMInterfaces<> PMI;
-	std::vector<Instruction *> FencesVect;
+	DenseMap<const Function *, SmallVector<Instruction *, 4>> FencesVectMap;
+
+	SmallVector<Value *, 16> GlobalVarVect;
 
 public:
 	static char ID;
@@ -139,11 +142,10 @@ public:
 		AU.setPreservesAll();
 	}
 
-	bool doInitialization(Module &M) {
-		return false;
-	}
+	bool doInitialization(Module &M);
 
 	bool doFinalization(Module &M) {
+		GlobalVarVect.clear();
 		return false;
 	}
 };
@@ -155,7 +157,9 @@ class ModelVerifierWrapperPass : public FunctionPass {
 	PerfCheckerInfo<> WritePCI;
 	PerfCheckerInfo<> FlushPCI;
 	PMInterfaces<> PMI;
-	std::vector<Instruction *> FencesVect;
+	DenseMap<const Function *, SmallVector<Instruction *, 4>> FencesVectMap;
+
+	SmallVector<Value *, 16> GlobalVarVect;
 
 public:
 	static char ID;
@@ -189,15 +193,19 @@ public:
 		AU.setPreservesAll();
 	}
 
-	bool doInitialization(Module &M) {
-		return false;
-	}
+	bool doInitialization(Module &M);
 
 	bool doFinalization(Module &M) {
+		GlobalVarVect.clear();
 		return false;
 	}
 
-	const std::vector<Instruction *> &getFencesVect() const {
+	SmallVector<Instruction *, 4> getFencesInfoFor(Function *F) const {
+		errs() << "GET FENCES FOR: " << F->getName() << "\n";
+		//const auto &FencesVect = FencesVectMap.lookup(F);
+		SmallVector<Instruction *, 4> FencesVect;
+		for(auto *Fence : FencesVectMap.lookup(F))
+			FencesVect.push_back(Fence);
 		return FencesVect;
 	}
 
