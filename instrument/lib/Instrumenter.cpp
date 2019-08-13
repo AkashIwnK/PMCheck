@@ -86,7 +86,8 @@ static void InstrumentWrite(Instruction *I, LLVMContext &Context,
 	 													const PMInterfaces<> &PMI, const DataLayout &DL,
 														TargetLibraryInfo &TLI, Function *Strlen,
 														AllocaInst *WriteIdArray, AllocaInst *WriteAddrArray,
-														AllocaInst *WriteSizeArray, Value *WriteIndex,
+														AllocaInst *WriteSizeArray, AllocaInst *TimeStamp,
+														AllocaInst *WriteTimeStampArray, uint64_t &WriteIndex,
 														DenseMap<const Instruction *, uint32_t>  &InstToIdMap,
 													  uint32_t RefIDPrefix, uint32_t &InstCounter) {
 	errs() << "INSTRUMENTING WRITE: ";
@@ -98,9 +99,11 @@ static void InstrumentWrite(Instruction *I, LLVMContext &Context,
 	auto &PMMI = PMI.getPmemInterface();
 
 // Increment the index
-	auto *Index = new LoadInst(Type::getInt64Ty(Context), WriteIndex, "", I);
-	auto *NewIndex = BinaryOperator::Create(Instruction::Add, Index, One, "", I);
-	new StoreInst(NewIndex, WriteIndex, I);
+	auto *Index = ConstantInt::get(Type::getInt64Ty(Context), WriteIndex++);
+	auto *CurTimeStamp = new LoadInst(Type::getInt64Ty(Context), TimeStamp, "", I);
+	auto *NewTimeStamp =
+					BinaryOperator::Create(Instruction::Add, CurTimeStamp, One, "", I);
+	new StoreInst(NewTimeStamp, TimeStamp, I);
 
 // Compute the ID for this instruction
 	auto Id = RefIDPrefix + InstCounter++;
@@ -112,13 +115,20 @@ static void InstrumentWrite(Instruction *I, LLVMContext &Context,
 // Index the ID into the write arrays
 	std::vector<Value *> IndexVect;
 	IndexVect.push_back(Zero);
-	IndexVect.push_back(NewIndex);
-	auto *IdArrayPtr = GetElementPtrInst::Create(WriteIdArray->getAllocatedType(),
+	IndexVect.push_back(Index);
+	auto *IdArrayPtr =
+					GetElementPtrInst::CreateInBounds(WriteIdArray->getAllocatedType(),
 														WriteIdArray, ArrayRef<Value *>(IndexVect), "", I);
-	auto *AddrArrayPtr = GetElementPtrInst::Create(WriteAddrArray->getAllocatedType(),
+	auto *AddrArrayPtr =
+					GetElementPtrInst::CreateInBounds(WriteAddrArray->getAllocatedType(),
 													WriteAddrArray, ArrayRef<Value *>(IndexVect), "", I);
-	auto *SizeArrayPtr = GetElementPtrInst::Create(WriteSizeArray->getAllocatedType(),
+	auto *SizeArrayPtr =
+					GetElementPtrInst::CreateInBounds(WriteSizeArray->getAllocatedType(),
 													WriteSizeArray, ArrayRef<Value *>(IndexVect), "", I);
+	auto *TimeStampArrayPtr =
+					GetElementPtrInst::CreateInBounds(WriteTimeStampArray->getAllocatedType(),
+													WriteTimeStampArray, ArrayRef<Value *>(IndexVect), "", I);
+	new StoreInst(CurTimeStamp, TimeStampArrayPtr, I);
 
 // Write to the arrays
 	auto *IdValue = ConstantInt::get(Type::getInt32Ty(Context), Id);
@@ -188,7 +198,8 @@ static void InstrumentWrite(Instruction *I, LLVMContext &Context,
 static void InstrumentFlush(Instruction *I, LLVMContext &Context,
 	 													const PMInterfaces<> &PMI, const DataLayout &DL,
 														AllocaInst *FlushIdArray, AllocaInst *FlushAddrArray,
-														AllocaInst *FlushSizeArray, Value *FlushIndex,
+														AllocaInst *FlushSizeArray, AllocaInst *TimeStamp,
+														AllocaInst *FlushTimeStampArray, uint64_t &FlushIndex,
 														DenseMap<const Instruction *, uint32_t>  &InstToIdMap,
 														uint32_t RefIDPrefix, uint32_t &InstCounter) {
 	errs() << "INSTRUMENTING FLUSH: ";
@@ -205,9 +216,11 @@ static void InstrumentFlush(Instruction *I, LLVMContext &Context,
 	auto &PI = PMI.getPersistInterface();
 
 // Increment the index
-	auto *Index = new LoadInst(Type::getInt64Ty(Context), FlushIndex, "", I);
-	auto *NewIndex = BinaryOperator::Create(Instruction::Add, Index, One, "", I);
-	new StoreInst(NewIndex, FlushIndex, I);
+	auto *Index = ConstantInt::get(Type::getInt64Ty(Context), FlushIndex++);
+	auto *CurTimeStamp = new LoadInst(Type::getInt64Ty(Context), TimeStamp, "", I);
+	auto *NewTimeStamp =
+					BinaryOperator::Create(Instruction::Add, CurTimeStamp, One, "", I);
+	new StoreInst(NewTimeStamp, TimeStamp, I);
 
 // Compute the ID for this instruction
 	auto Id = RefIDPrefix + InstCounter++;
@@ -219,13 +232,20 @@ static void InstrumentFlush(Instruction *I, LLVMContext &Context,
 // Index the ID into the write arrays
 	std::vector<Value *> IndexVect;
 	IndexVect.push_back(Zero);
-	IndexVect.push_back(NewIndex);
-	auto *IdArrayPtr = GetElementPtrInst::Create(FlushIdArray->getAllocatedType(),
+	IndexVect.push_back(Index);
+	auto *IdArrayPtr =
+						GetElementPtrInst::CreateInBounds(FlushIdArray->getAllocatedType(),
 														FlushIdArray, ArrayRef<Value *>(IndexVect), "", I);
-	auto *AddrArrayPtr = GetElementPtrInst::Create(FlushAddrArray->getAllocatedType(),
+	auto *AddrArrayPtr =
+					GetElementPtrInst::CreateInBounds(FlushAddrArray->getAllocatedType(),
 													FlushAddrArray, ArrayRef<Value *>(IndexVect), "", I);
-	auto *SizeArrayPtr = GetElementPtrInst::Create(FlushSizeArray->getAllocatedType(),
+	auto *SizeArrayPtr =
+					GetElementPtrInst::CreateInBounds(FlushSizeArray->getAllocatedType(),
 													FlushSizeArray, ArrayRef<Value *>(IndexVect), "", I);
+	auto *TimeStampArrayPtr =
+					GetElementPtrInst::CreateInBounds(FlushTimeStampArray->getAllocatedType(),
+													FlushTimeStampArray, ArrayRef<Value *>(IndexVect), "", I);
+	new StoreInst(CurTimeStamp, TimeStampArrayPtr, I);
 
 // Write to the arrays
 	auto *IdValue = ConstantInt::get(Type::getInt32Ty(Context), Id);
@@ -247,6 +267,8 @@ static void InstrumentFlush(Instruction *I, LLVMContext &Context,
 }
 
 static void InstrumentForPMModelVerifier(Function *F,
+									SmallVector<Instruction *, 4> &RetsVect,
+									SmallVector<Instruction *, 4> &CallsVect,
 									SmallVector<Instruction *, 4> &FencesVect,
 									PerfCheckerInfo<> &PerfCheckerWriteInfo,
 									PerfCheckerInfo<> &PerfCheckerFlushInfo,
@@ -269,41 +291,52 @@ static void InstrumentForPMModelVerifier(Function *F,
 	AllocaInst *WriteIdArray;
 	AllocaInst *WriteAddrArray;
 	AllocaInst *WriteSizeArray;
-	AllocaInst *WriteIndex;
+	AllocaInst *WriteTimeStampArray;
 	AllocaInst *FlushIdArray;
 	AllocaInst *FlushAddrArray;
 	AllocaInst *FlushSizeArray;
-	AllocaInst *FlushIndex;
+	AllocaInst *TimeStampArray;
+	AllocaInst *FlushTimeStampArray;
+	AllocaInst *TimeStamp;
 	auto *FirstInstInEntryBlock = F->getEntryBlock().getFirstNonPHI();
-	if(PerfCheckerWriteInfo.size(F)) {
+	uint64_t NumWriteInfoSets = PerfCheckerWriteInfo.size(F);
+	uint64_t NumFlushInfoSets = PerfCheckerFlushInfo.size(F);
+	uint64_t MaxNumWritesInSets = PerfCheckerWriteInfo.maxSetSize(F);
+	uint64_t MaxNumFlushesInSets = PerfCheckerFlushInfo.maxSetSize(F);
+	if(NumWriteInfoSets) {
 		auto *WriteArray32Ty = ArrayType::get(Type::getInt32Ty(Context),
-																		PerfCheckerWriteInfo.maxSetSize(F));
+																					MaxNumWritesInSets);
 		auto *WriteArray64Ty = ArrayType::get(Type::getInt64Ty(Context),
-																		PerfCheckerWriteInfo.maxSetSize(F));
+																					MaxNumWritesInSets);
 		WriteIdArray = new AllocaInst(WriteArray32Ty, 0, One, 0,
 	 																"", FirstInstInEntryBlock);
 		WriteAddrArray = new AllocaInst(WriteArray64Ty, 0, One,
 																		0, "", FirstInstInEntryBlock);
 		WriteSizeArray = new AllocaInst(WriteArray64Ty, 0, One,
 																		0, "", FirstInstInEntryBlock);
-		WriteIndex = new AllocaInst(Type::getInt64Ty(Context), 0, One, 0, "",
-									  						FirstInstInEntryBlock);
-		new StoreInst(Zero, WriteIndex, FirstInstInEntryBlock);
+		WriteTimeStampArray = new AllocaInst(WriteArray64Ty, 0, One,
+																				 0, "", FirstInstInEntryBlock);
 	}
-	if(PerfCheckerWriteInfo.size(F)) {
+	if(NumFlushInfoSets) {
 		auto *FlushArray32Ty = ArrayType::get(Type::getInt32Ty(Context),
-																		PerfCheckerFlushInfo.maxSetSize(F));
+																					MaxNumFlushesInSets);
 		auto *FlushArray64Ty = ArrayType::get(Type::getInt64Ty(Context),
-																		PerfCheckerFlushInfo.maxSetSize(F));
+																					MaxNumFlushesInSets);
 		FlushIdArray = new AllocaInst(FlushArray32Ty, 0, One, 0,
 																	"", FirstInstInEntryBlock);
 		FlushAddrArray = new AllocaInst(FlushArray64Ty, 0, One,
 																		0, "", FirstInstInEntryBlock);
 		FlushSizeArray = new AllocaInst(FlushArray64Ty, 0, One,
 																		0, "", FirstInstInEntryBlock);
-		FlushIndex = new AllocaInst(Type::getInt64Ty(Context), 0, One, 0, "",
-									  						FirstInstInEntryBlock);
-		new StoreInst(Zero, FlushIndex, FirstInstInEntryBlock);
+		FlushTimeStampArray = new AllocaInst(FlushArray64Ty, 0, One,
+																				 0, "", FirstInstInEntryBlock);
+	}
+	if(NumWriteInfoSets || NumFlushInfoSets) {
+		//auto *Array64Ty = ArrayType::get(Type::getInt64Ty(Context),
+			//														 	 MaxNumWritesInSets + MaxNumFlushesInSets);
+		TimeStamp = new AllocaInst(Type::getInt64Ty(Context), 0, One,
+															 0, "", FirstInstInEntryBlock);
+		new StoreInst(Zero, TimeStamp, FirstInstInEntryBlock);
 	}
 	errs() << "ALL ALLOCAS ARE INSERTED\n";
 	F->print(errs());
@@ -311,7 +344,8 @@ static void InstrumentForPMModelVerifier(Function *F,
 // Instrument to record persist operations
 	auto RecordOpsBefore = [&](Instruction *I, AllocaInst *OpIdArray,
 														 AllocaInst *OpAddrArray, AllocaInst *OpSizeArray,
-														 Value *OpIndex, Function *RecordFunc) {
+														 AllocaInst *OpTimeStampArray, uint64_t &OpIndex,
+														 Function *RecordFunc) {
 	// Instrument the write
 		auto *IdPtrToInt = new PtrToIntInst(OpIdArray,
 																				Type::getInt64Ty(Context), "", I);
@@ -319,21 +353,26 @@ static void InstrumentForPMModelVerifier(Function *F,
 																					Type::getInt64Ty(Context), "", I);
 		auto *SizePtrToInt = new PtrToIntInst(OpSizeArray,
 																					Type::getInt64Ty(Context), "", I);
-		auto *ArraysSize =
-								new LoadInst(Type::getInt64Ty(Context), OpIndex, "", I);
+		auto *TimeStampPtrToInt =  new PtrToIntInst(OpTimeStampArray,
+																					Type::getInt64Ty(Context), "", I);
+		auto *ArraysSize = ConstantInt::get(Type::getInt64Ty(Context), OpIndex);
+							//	new LoadInst(Type::getInt64Ty(Context), OpIndex, "", I);
 		std::vector<Value *> ArgVect;
 		ArgVect.push_back(IdPtrToInt);
 		ArgVect.push_back(AddrPtrToInt);
 		ArgVect.push_back(SizePtrToInt);
+		ArgVect.push_back(TimeStampPtrToInt);
 		ArgVect.push_back(ArraysSize);
 		CallInst::Create(RecordFunc->getFunctionType(),
 										 RecordFunc, ArrayRef<Value *>(ArgVect), "", I);
-		new StoreInst(Zero, OpIndex, I);
+		//new StoreInst(Zero, OpIndex, I);
+		OpIndex = 0;
 		F->print(errs());
 	};
 
 // Instrument Writes
 	uint32_t InstCounter = 0;
+	uint64_t WriteIndex = 0;
 	for(PerfCheckerInfo<>::iterator It = PerfCheckerWriteInfo.begin(F);
 			It != PerfCheckerWriteInfo.end(F); ++It) {
 		auto SerialInsts = *It;
@@ -342,14 +381,15 @@ static void InstrumentForPMModelVerifier(Function *F,
 		Instruction *PrevInstrumentedInst = nullptr;
 		for(auto *I : SerialInsts) {
 			InstrumentWrite(I, Context, PMI, DL, TLI, Strlen, WriteIdArray,
-											WriteAddrArray, WriteSizeArray, WriteIndex, InstToIdMap,
+											WriteAddrArray, WriteSizeArray, TimeStamp,
+											WriteTimeStampArray, WriteIndex, InstToIdMap,
 											RefIDPrefix, InstCounter);
 			errs() << "--MAP SIZE: " << InstToIdMap.size() << "\n";
 			if(L != GI.getLoopFor(I->getParent())) {
 			// Since this is a different loop, record the write
 				PrevInstrumentedInst = I;
 				RecordOpsBefore(I, WriteIdArray, WriteAddrArray, WriteSizeArray,
-													 WriteIndex, RecordNonStrictWrites);
+												WriteTimeStampArray, WriteIndex, RecordNonStrictWrites);
 			}
 		}
 
@@ -357,11 +397,13 @@ static void InstrumentForPMModelVerifier(Function *F,
 		auto *LastInstInSet = SerialInsts[SerialInsts.size() - 1];
 		if(!PrevInstrumentedInst || PrevInstrumentedInst != LastInstInSet) {
 			RecordOpsBefore(LastInstInSet, WriteIdArray, WriteAddrArray,
-				 							WriteSizeArray, WriteIndex, RecordNonStrictWrites);
+				 							WriteSizeArray, WriteTimeStampArray, WriteIndex,
+											RecordNonStrictWrites);
 		}
 	}
 
 // Instrument Flushes
+	uint64_t FlushIndex = 0;
 	for(PerfCheckerInfo<>::iterator It = PerfCheckerFlushInfo.begin(F);
 			It != PerfCheckerFlushInfo.end(F); ++It) {
 		auto SerialInsts = *It;
@@ -370,14 +412,14 @@ static void InstrumentForPMModelVerifier(Function *F,
 		Instruction *PrevInstrumentedInst = nullptr;
 		for(auto *I : SerialInsts) {
 			InstrumentFlush(I, Context, PMI, DL, FlushIdArray, FlushAddrArray,
-											FlushSizeArray, FlushIndex, InstToIdMap,
-											RefIDPrefix, InstCounter);
+											FlushSizeArray, TimeStamp, FlushTimeStampArray,
+											FlushIndex, InstToIdMap, RefIDPrefix, InstCounter);
 			errs() << "--MAP SIZE: " << InstToIdMap.size() << "\n";
 			if(L != GI.getLoopFor(I->getParent())) {
 			// Since this is a different loop, record the write
 				PrevInstrumentedInst = I;
 				RecordOpsBefore(I, FlushIdArray, FlushAddrArray, FlushSizeArray,
-												FlushIndex, RecordFlushes);
+												FlushTimeStampArray, FlushIndex, RecordFlushes);
 			}
 		}
 
@@ -385,7 +427,8 @@ static void InstrumentForPMModelVerifier(Function *F,
 		auto *LastInstInSet = SerialInsts[SerialInsts.size() - 1];
 		if(!PrevInstrumentedInst || PrevInstrumentedInst != LastInstInSet) {
 			RecordOpsBefore(LastInstInSet, FlushIdArray, FlushAddrArray,
-											FlushSizeArray, FlushIndex, RecordFlushes);
+											FlushSizeArray, FlushTimeStampArray, FlushIndex,
+											RecordFlushes);
 		}
 	}
 
@@ -409,6 +452,29 @@ static void InstrumentForPMModelVerifier(Function *F,
 	}
 	errs() << "ALL FENCES INSTRUMENTED\n";
 	errs() << "+++MAP SIZE: " << InstToIdMap.size() << "\n";
+
+// Instrument call and return instructions
+	for(auto *Call : CallsVect) {
+	// Update the time stamp before the call instruction.
+		std::vector<Value *> ArgVect;
+		auto *LoadedTimeStamp =
+									new LoadInst(Type::getInt64Ty(Context), TimeStamp, "", Call);
+		ArgVect.push_back(LoadedTimeStamp);
+		CallInst::Create(UpdateTimeStamp->getFunctionType(),
+						 				 UpdateTimeStamp, ArrayRef<Value *>(ArgVect), "", Call);
+
+	// Load the time stamp again after the call instruction.
+
+	}
+	for(auto *Ret : RetsVect) {
+		std::vector<Value *> ArgVect;
+		auto *LoadedTimeStamp =
+									new LoadInst(Type::getInt64Ty(Context), TimeStamp, "", Ret);
+		ArgVect.push_back(LoadedTimeStamp);
+		CallInst::Create(UpdateTimeStamp->getFunctionType(),
+						 				 UpdateTimeStamp, ArrayRef<Value *>(ArgVect), "", Ret);
+	}
+
 	F->print(errs());
 }
 
@@ -435,27 +501,27 @@ static void DefineConstructor(Module &M, LLVMContext &Context,
 // The condblock registers all instruction IDs and their line numbers with the runtime.
 // First allocate two arrays: one to put instruction IDs and another for line numbers.
 	errs() << "ENTRY BLOCK ADDED\n";
+	auto *Zero = ConstantInt::get(Type::getInt8Ty(Context), 0);
+	auto *One = ConstantInt::get(Type::getInt8Ty(Context), 1);
 	uint64_t NumInsts = InstIdToLineNoMap.size();
 	auto *ArraySize = ConstantInt::get(Type::getInt64Ty(Context), NumInsts);
-	auto *IdArray =
-			new AllocaInst(Type::getInt32Ty(Context), 0, ArraySize, 0, "", EntryBlock);
-	auto *LineArray =
-			new AllocaInst(Type::getInt64Ty(Context), 0, ArraySize, 0, "", EntryBlock);
+	auto *Array32Ty = ArrayType::get(Type::getInt32Ty(Context), NumInsts);
+	auto *Array64Ty = ArrayType::get(Type::getInt64Ty(Context), NumInsts);
+	auto *IdArray = new AllocaInst(Array32Ty, 0, One, 0, "", EntryBlock);
+	auto *LineArray = new AllocaInst(Array64Ty, 0, One, 0, "", EntryBlock);
 	errs() << "ALLOCAS INSERTED\n";
 	uint64_t Index = 0;
-	auto *Zero = ConstantInt::get(Type::getInt8Ty(Context), 0);
 	std::vector<Value *> IndexVect;
 	IndexVect.push_back(Zero);
 	for(auto &Pair : InstIdToLineNoMap) {
 	// Index into the arrays
-		auto ConstantIndex =
-				ConstantInt::get(Type::getInt64Ty(Context), NumInsts);
+		auto ConstantIndex = ConstantInt::get(Type::getInt64Ty(Context), Index++);
 		IndexVect.push_back(ConstantIndex);
 		auto *IdIndexedPtr =
-				GetElementPtrInst::CreateInBounds(Type::getInt32Ty(Context),
+				GetElementPtrInst::CreateInBounds(IdArray->getAllocatedType(),
 								IdArray, ArrayRef<Value *>(IndexVect), "", EntryBlock);
 		auto *LineIndexedPtr =
-				GetElementPtrInst::CreateInBounds(Type::getInt64Ty(Context),
+				GetElementPtrInst::CreateInBounds(LineArray->getAllocatedType(),
 								LineArray, ArrayRef<Value *>(IndexVect), "", EntryBlock);
 		IndexVect.pop_back();
 
@@ -465,6 +531,7 @@ static void DefineConstructor(Module &M, LLVMContext &Context,
 		new StoreInst(ConstantId, IdIndexedPtr, EntryBlock);
 		new StoreInst(ConstantLine, LineIndexedPtr, EntryBlock);
 	}
+	errs() << "ARRAYS INDEXED\n";
 
 // Pass the arrays to the runtime function. Create the function first.
 	TypeVect.push_back(ArrayType::get(Type::getInt32Ty(Context), NumInsts));
@@ -489,7 +556,7 @@ static void DefineConstructor(Module &M, LLVMContext &Context,
 bool InstrumentationPass::doInitialization(Module &M) {
 	errs() << "INITIALIZING PASS\n";
 
-// Define the functions that we need to insert
+// Define the functions that we need to insert for recording persists
 	auto &Context = M.getContext();
 	std::vector<Type *> TypeVect;
 	TypeVect.push_back(Type::getInt32Ty(Context));
@@ -499,6 +566,7 @@ bool InstrumentationPass::doInitialization(Module &M) {
 																					"FenceEncountered", &M);
 	FenceEncountered->setOnlyAccessesInaccessibleMemory();
 	TypeVect.clear();
+	TypeVect.push_back(Type::getInt64Ty(Context));
 	TypeVect.push_back(Type::getInt64Ty(Context));
 	TypeVect.push_back(Type::getInt64Ty(Context));
 	TypeVect.push_back(Type::getInt64Ty(Context));
@@ -521,7 +589,6 @@ bool InstrumentationPass::doInitialization(Module &M) {
 	TypeVect.push_back(PointerType::get(Type::getInt8Ty(Context), 0));
 	FuncType = FunctionType::get(Type::getInt64Ty(Context),
 															 ArrayRef<Type *>(TypeVect), 0);
-
 	auto *StrlenCallee = M.getOrInsertFunction(StringRef("strlen"), FuncType);
 	Strlen = cast<Function>(StrlenCallee);
 	if(!Strlen) {
@@ -529,6 +596,20 @@ bool InstrumentationPass::doInitialization(Module &M) {
 		Strlen = cast<Function>(StrlenCallee->stripPointerCasts());
 		assert(Strlen && "Error in getting strlen declaration.");
 	}
+
+// Functions for time stamp
+	TypeVect.clear();
+	FuncType = FunctionType::get(Type::getVoidTy(Context),,
+															 ArrayRef<Type *>(TypeVect), 0);
+	GetTimeStamp = Function::Create(FuncType, GlobalValue::ExternalLinkage,
+																	 "GetTimeStamp", &M);
+	GetTimeStamp->setOnlyAccessesInaccessibleMemory();
+	TypeVect.push_back(Type::getInt64Ty(Context));
+	FuncType = FunctionType::get(Type::getVoidTy(Context),
+															 ArrayRef<Type *>(TypeVect), 0);
+	UpdateTimeStamp = Function::Create(FuncType, GlobalValue::ExternalLinkage,
+																	 "UpdateTimeStamp", &M);
+	UpdateTimeStamp->setOnlyAccessesInaccessibleMemory();
 	errs() << "PASS INITIALIZED\n";
 	return false;
 }
@@ -537,6 +618,7 @@ bool InstrumentationPass::doFinalization(Module &M) {
 	errs() << "PRINTING MODULE: ";
 	M.print(errs(), nullptr);
 // Now define the constructors and destructors
+	errs() << "FINAL MAP SIZE: " << InstIdToLineNoMap.size() << "\n";
 	DefineConstructor(M, M.getContext(), InstIdToLineNoMap);
 	//DefineDestructor(M, Context);
 	errs() << "PRINTING MODULE AGAIN:";
@@ -567,16 +649,12 @@ bool InstrumentationPass::runOnFunction(Function &F) {
 	errs() << "GOT CONDBLOCK SET AND LOOP INFO\n";
 
 	auto FencesVect = getAnalysis<ModelVerifierWrapperPass>().getFencesInfoFor(&F);
-	errs() << "GOT FENCE VECTOR\n";
-	for(auto *Fence : FencesVect) {
-		errs() << "FENCE INST: ";
-		Fence->print(errs());
-		errs() << "\n";
-	}
+	auto CallsVect = getAnalysis<ModelVerifierWrapperPass>().getCallsInfoFor(&F);
+	auto RetsVect = getAnalysis<ModelVerifierWrapperPass>().getRetsInfoFor(&F);
 
-	InstrumentForPMModelVerifier(&F, FencesVect, PerfCheckerWriteInfo,
-															 PerfCheckerFlushInfo, InstToIdMap,
-															 PMI, TLI, GI, FenceEncountered,
+	InstrumentForPMModelVerifier(&F, RetsVect, CallsVect, FencesVect,
+															 PerfCheckerWriteInfo, PerfCheckerFlushInfo,
+															 InstToIdMap, PMI, TLI, GI, FenceEncountered,
 															 RecordNonStrictWrites, RecordFlushes, Strlen);
 
 // Get line number of an instruction
