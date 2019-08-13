@@ -108,6 +108,8 @@ class ModelVerifierPass : public FunctionPass {
 	PerfCheckerInfo<> FlushPCI;
 	PMInterfaces<> PMI;
 	DenseMap<const Function *, SmallVector<Instruction *, 4>> FencesVectMap;
+	DenseMap<const Function *, SmallVector<Instruction *, 4>> CallsVectMap;
+	DenseMap<const Function *, SmallVector<Instruction *, 4>> RetsVectMap;
 
 	SmallVector<Value *, 16> GlobalVarVect;
 
@@ -158,6 +160,8 @@ class ModelVerifierWrapperPass : public FunctionPass {
 	PerfCheckerInfo<> FlushPCI;
 	PMInterfaces<> PMI;
 	DenseMap<const Function *, SmallVector<Instruction *, 4>> FencesVectMap;
+	DenseMap<const Function *, SmallVector<Instruction *, 4>> CallsVectMap;
+	DenseMap<const Function *, SmallVector<Instruction *, 4>> RetsVectMap;
 
 	SmallVector<Value *, 16> GlobalVarVect;
 
@@ -207,6 +211,24 @@ public:
 		for(auto *Fence : FencesVectMap.lookup(F))
 			FencesVect.push_back(Fence);
 		return FencesVect;
+	}
+
+	SmallVector<Instruction *, 4> getCallsInfoFor(Function *F) const {
+		errs() << "GET CALLS FOR: " << F->getName() << "\n";
+		//const auto &FencesVect = FencesVectMap.lookup(F);
+		SmallVector<Instruction *, 4> CallsVect;
+		for(auto *Call : CallsVectMap.lookup(F))
+			CallsVect.push_back(Call);
+		return CallsVect;
+	}
+
+	SmallVector<Instruction *, 4> getRetsInfoFor(Function *F) const {
+		errs() << "GET RETS FOR: " << F->getName() << "\n";
+		//const auto &FencesVect = FencesVectMap.lookup(F);
+		SmallVector<Instruction *, 4> RetsVect;
+		for(auto *Ret : RetsVectMap.lookup(F))
+			RetsVect.push_back(Ret);
+		return RetsVect;
 	}
 
 	const PerfCheckerInfo<> &getPerfCheckerWriteInfo() const {
