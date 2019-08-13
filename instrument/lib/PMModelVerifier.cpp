@@ -256,6 +256,8 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 												 SCCToInstsPairVectTy &SCCToFlushesPairVect,
 												 SmallVector<BasicBlock *, 4> &BBWithFirstSerialWrites,
 												 SmallVector<BasicBlock *, 4> &BBWithFirstSerialFlushes,
+												 SmallVector<Instruction *, 4> &RetsVect,
+												 SmallVector<Instruction *, 4> &CallsVect,
 												 SmallVector<Instruction *, 4> &FencesVect,
 												 DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
 												 SmallVector<Value *, 16> &StackAndGlobalVarVect,
@@ -466,6 +468,13 @@ IterateBlockToGroupInsts(BasicBlock *BB, bool &InterveningFence, bool &FenceStop
 			}
 			FenceStop = true;
 			InterveningFence = true;
+			CallsVect.push_back(CI);
+			continue;
+		}
+		if(auto *RI = dyn_cast<ReturnInst>(I)) {
+		// Add the return instructions to help other passes to do interprocedural
+		// analysis.
+			RetsVect.push_back(RI);
 			continue;
 		}
 	}
@@ -480,6 +489,8 @@ static void GroupSerialInstsInSCC(Function *F,  GenCondBlockSetLoopInfo &GI,
 																  SCCToInstsPairVectTy &FenceFreeSCCToFlushesPairVect,
 																  SmallVector<BasicBlock *, 4> &BBWithFirstSerialWrites,
 																  SmallVector<BasicBlock *, 4> &BBWithFirstSerialFlushes,
+																	SmallVector<Instruction *, 4> &RetsVect,
+																	SmallVector<Instruction *, 4> &CallsVect,
 																  SmallVector<Instruction *, 4> &FencesVect,
 																  DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
 																  SmallVector<Value *, 16> &StackAndGlobalVarVect,
@@ -504,8 +515,8 @@ static void GroupSerialInstsInSCC(Function *F,  GenCondBlockSetLoopInfo &GI,
 			IterateBlockToGroupInsts(BB, InterveningFence, FenceStop,
 									 SW, SF, PMI, SCCIterator, SCCToWritesPairVect,
 									 SCCToFlushesPairVect, BBWithFirstSerialWrites,
-									 BBWithFirstSerialFlushes, FencesVect, BlockToSCCMap,
-									 StackAndGlobalVarVect, AA, TLI, StrictModel);
+									 BBWithFirstSerialFlushes, RetsVect, CallsVect, FencesVect,
+									 BlockToSCCMap, StackAndGlobalVarVect, AA, TLI, StrictModel);
 		} else {
 			const DomTreeNodeBase<BasicBlock> *DomRoot =
 							 DT.getNode((*SCCIterator)[(*SCCIterator).size() - 1]);
@@ -522,8 +533,8 @@ static void GroupSerialInstsInSCC(Function *F,  GenCondBlockSetLoopInfo &GI,
 				IterateBlockToGroupInsts(BB, InterveningFence, FenceStop,
 										 SW, SF, PMI, SCCIterator, SCCToWritesPairVect,
 										 SCCToFlushesPairVect, BBWithFirstSerialWrites,
-										 BBWithFirstSerialFlushes, FencesVect, BlockToSCCMap,
-										 StackAndGlobalVarVect, AA, TLI, StrictModel);
+										 BBWithFirstSerialFlushes, RetsVect, CallsVect, FencesVect,
+										 BlockToSCCMap, StackAndGlobalVarVect, AA, TLI, StrictModel);
 			}
 		}
 
@@ -775,6 +786,8 @@ static void PopulateSerialInstsInfo(Function *F, GenCondBlockSetLoopInfo &GI,
 																  	DominatorTree &DT, AAResults &AA,
 																		TargetLibraryInfo &TLI,
 																		SmallVector<Value *, 16> &GlobalVarVect,
+																		SmallVector<Instruction *, 4> &RetsVect,
+																		SmallVector<Instruction *, 4> &CallsVect,
 																		SmallVector<Instruction *, 4> &FencesVect,
 																		PMInterfaces<> &PMI,
 																		PerfCheckerInfo<> &WritePCI,
@@ -800,7 +813,7 @@ static void PopulateSerialInstsInfo(Function *F, GenCondBlockSetLoopInfo &GI,
 	GroupSerialInstsInSCC(F, GI, DT, AA, TLI, PMI, SCCToWritesPairVect,
 						  SCCToFlushesPairVect, FenceFreeSCCToWritesPairVect,
 						  FenceFreeSCCToFlushesPairVect, BBWithFirstSerialWrites,
-						  BBWithFirstSerialFlushes, FencesVect,
+						  BBWithFirstSerialFlushes, RetsVect, CallsVect, FencesVect,
 						  BlockToSCCMap, StackAndGlobalVarVect, StrictModel);
 
 	errs() << "GROUPED SERIAL INSTRUCTIONS\n";
@@ -962,16 +975,21 @@ bool ModelVerifierWrapperPass::runOnFunction(Function &F) {
 	auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
 	auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 
-	SmallVector<Instruction *, 4> FencesVect;
-	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, GlobalVarVect, FencesVectMap[&F], PMI,
+	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, GlobalVarVect, RetsVectMap[&F],
+													CallsVectMap[&F], FencesVectMap[&F], PMI,
 													WritePCI, FlushPCI);
 	errs() << "PRINTING WRITES:\n";
 	WritePCI.printFuncToSerialInstsSetMap();
 	errs() << "PRINTING FLUSHES:\n";
 	FlushPCI.printFuncToSerialInstsSetMap();
 	errs() << "PRINTING FENCES:\n";
-	for(auto *Fence : FencesVectMap.lookup(&F)) {
+	for(auto *Fence : FencesVectMap[&F]) {
 		Fence->print(errs());
+		errs() << "\n";
+	}
+	errs() << "PRINTING CALLS:\n";
+	for(auto *Call : CallsVectMap[&F]) {
+		Call->print(errs());
 		errs() << "\n";
 	}
 	//FencesVectMap[&F].append(FencesVect.begin(), FencesVect.end());
@@ -1000,16 +1018,21 @@ bool ModelVerifierPass::runOnFunction(Function &F) {
 	auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
 	auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 
-	SmallVector<Instruction *, 4> FencesVect;
-	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, GlobalVarVect, FencesVectMap[&F], PMI,
+	PopulateSerialInstsInfo(&F, GI, DT, AA, TLI, GlobalVarVect, RetsVectMap[&F],
+													CallsVectMap[&F], FencesVectMap[&F], PMI,
 													WritePCI, FlushPCI);
 	errs() << "PRINTING WRITES:\n";
 	WritePCI.printFuncToSerialInstsSetMap();
 	errs() << "PRINTING FLUSHES:\n";
 	FlushPCI.printFuncToSerialInstsSetMap();
 	errs() << "PRINTING FENCES:\n";
-	for(auto *Fence : FencesVect) {
+	for(auto *Fence : FencesVectMap[&F]) {
 		Fence->print(errs());
+		errs() << "\n";
+	}
+	errs() << "PRINTING CALLS:\n";
+	for(auto *Call : CallsVectMap[&F]) {
+		Call->print(errs());
 		errs() << "\n";
 	}
 	//FencesVectMap[&F].append(FencesVect.begin(), FencesVect.end());
