@@ -1,0 +1,9 @@
+; Function Attrs: noinline nounwind optnone uwtable
+define internal i32 @pi_task_construct(%struct.pmemobjpool* %0, i8* %1, i8* %2) #0 {
+  %3 = bitcast i8* %1 to %struct.pi_task_proto*
+  %4 = getelementptr inbounds %struct.pi_task, %struct.pi_task* %3, i32 0, i32 0
+  %5 = bitcast %struct.pi_task_proto* %4 to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %5, i8* align 16 %2, i64 32, i1 false)
+  call void @pmemobj_persist(%struct.pmemobjpool* %0, i8* %3, i64 96)
+  ret i32 0
+}
