@@ -7,3 +7,30 @@ define internal i32 @pi_task_construct(%struct.pmemobjpool* %0, i8* %1, i8* %2) 
   call void @pmemobj_persist(%struct.pmemobjpool* %0, i8* %3, i64 96)
   ret i32 0
 }
+
+
+static TOID(struct tree_map_node)
+btree_map_create_split_node(TOID(struct tree_map_node) node,
+	struct tree_map_node_item *m)
+{
+	TOID(struct tree_map_node) right = TX_ZNEW(struct tree_map_node);
+
+	int c = (BTREE_ORDER / 2);
+	*m = D_RO(node)->items[c - 1]; /* select median item */
+	TX_ADD(node);
+	set_empty_item(&D_RW(node)->items[c - 1]);
+
+	/* move everything right side of median to the new node */
+	for (int i = c; i < BTREE_ORDER; ++i) {
+		if (i != BTREE_ORDER - 1) {
+			D_RW(right)->items[D_RW(right)->n++] =
+				D_RO(node)->items[i];
+			set_empty_item(&D_RW(node)->items[i]);
+		}
+		D_RW(right)->slots[i - c] = D_RO(node)->slots[i];
+		D_RW(node)->slots[i] = TOID_NULL(struct tree_map_node);
+	}
+	D_RW(node)->n = c - 1;
+
+	return right;
+}
