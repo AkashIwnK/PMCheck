@@ -1,10 +1,3 @@
-//===----------------------------------------------------------------------===//
-//
-// This file implements the TDDataStructures class, which represents the
-// Top-down Interprocedural closure of the data structure graph over the
-// program.
-//
-//===----------------------------------------------------------------------===//
 
 #include "llvm/IR/Module.h"
 #include "llvm/IR/DerivedTypes.h"

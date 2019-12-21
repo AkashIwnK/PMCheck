@@ -1,11 +1,3 @@
-//=================== COMMON SCC OPERATIONS =====================//
-//--------------------------------------------------------------//
-//
-// This contains some common operations that passes perform on
-// strongly connected components.
-//
-//==============================================================//
-
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/DenseMap.h"

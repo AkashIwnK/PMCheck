@@ -1,10 +1,3 @@
-//------------------------------------------------------------------------//
-//
-// This contains a function for checking whether an instruction that
-// performs memory operation(s) aliases with a given set of memory regions
-// represented by some values.
-//
-//------------------------------------------------------------------------//
 
 
 #ifndef PM_WRITE_ALIAS_CHECK_H__

@@ -1,10 +1,3 @@
-//===----------------------------------------------------------------------===//
-//
-// This pass uses the top-down data structure graphs to implement a simple
-// context sensitive alias analysis.
-//
-//===----------------------------------------------------------------------===//
-
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"

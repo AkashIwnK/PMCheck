@@ -1,12 +1,3 @@
-//===- Local.cpp - Compute a local data structure graph for a function ----===//
-//
-//
-//===----------------------------------------------------------------------===//
-//
-// Compute the local version of the data structure graph for a function.
-// The external interface to this file is the DSGraph constructor.
-//
-//===----------------------------------------------------------------------===//
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"

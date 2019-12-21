@@ -1,10 +1,3 @@
-//==============================================================================//
-//
-// Looks for semantics that may detrimant performance of a system using
-// persistant memory or not. We also check whether correct instructions
-// are used or not.  Use of incorrect type of instructions can cause slowdowns.
-//
-//===============================================================================//
 
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -44,7 +37,7 @@
 #include "GenCondInfo.h"
 #include "GenCondInfoImpl.h"
 #include "Interfaces.h"
-#include "PMRedFlushesChecker.h"
+#include "PMRedPersistsChecker.h"
 #include "SCC_Iterator.h"
 #include "FlowAwarePostOrder.h"
 #include "WriteAliasCheck.h"

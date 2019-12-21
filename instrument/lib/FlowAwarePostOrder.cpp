@@ -1,9 +1,3 @@
-//======================= Post Order Implementation  ==========================//
-//
-// Implementation for a post order arrangement with awareness of control flow.
-// This places restrictions on the usual post order traversal of a graph.
-//
-//===============================================================================//
 
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/Analysis/PostDominators.h"

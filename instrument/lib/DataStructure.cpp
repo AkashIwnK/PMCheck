@@ -1,8 +1,3 @@
-//===----------------------------------------------------------------------===//
-//
-// This file implements the core data structure functionality.
-//
-//===----------------------------------------------------------------------===//
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
@@ -1026,11 +1021,6 @@ void DSCallSite::InitNH(DSNodeHandle &NH, const DSNodeHandle &Src,
   NH = RC.getClonedNH(Src);
 }
 
-//===----------------------------------------------------------------------===//
-// DSGraph Implementation
-//===----------------------------------------------------------------------===//
-/// getFunctionNames - Return a space separated list of the name of the
-/// functions in this graph (if any)
 std::string DSGraph::getFunctionNames() const {
   /*
   switch (getReturnNodes().size()) {

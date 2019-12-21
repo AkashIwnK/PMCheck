@@ -1,9 +1,3 @@
-//======================= SCC Iterator Implementation  ==========================//
-//
-// Implementation for a moddified SCC iterator that is different from LLVM's
-// conventional SCC iterator.
-//
-//===============================================================================//
 
 #ifndef PM_SCC_ITERATOR_H_
 #define PM_SCC_ITERATOR_H_

@@ -1,9 +1,3 @@
-//===----------------------------------------------------------------------===//
-//
-// This header defines the data structure graph (DSGraph) and the
-// ReachabilityCloner class.
-//
-//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_ANALYSIS_DSGRAPH_H
 #define LLVM_ANALYSIS_DSGRAPH_H

@@ -1,9 +1,3 @@
-//======================= Post Order Implementation  ==========================//
-//
-// Implementation for a post order arrangement with awareness of control flow.
-// This places restrictions on the usual post order traversal of a graph.
-//
-//===============================================================================//
 
 
 #ifndef FLOW_AWARE_POST_ORDER_IT_H__

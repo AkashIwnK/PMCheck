@@ -1,13 +1,3 @@
-//=============== Header file for getting a if-blocks forest ================//
-//
-//=====------------------------------------------------------------------=====//
-//
-// The following classes accounts for "natural" if-else or if-then blocks
-// and rare gotos. Loops are treated completely differently and if-headers that
-// are loop headers are not taken into account here.
-//
-//=====------------------------------------------------------------------=====//
-
 #ifndef CONDBLOCKINFO_H_
 #define CONDBLOCKINFO_H_
 

@@ -1,12 +1,3 @@
-//========================== WRITE ALIAS CHECK ===========================//
-//
-//------------------------------------------------------------------------//
-//
-// This contains the function for checking whether an instruction that
-// performs memory operation(s) aliases with a given set of memory regions
-// represented by some values.
-//
-//------------------------------------------------------------------------//
 
 
 #include "llvm/ADT/SmallVector.h"

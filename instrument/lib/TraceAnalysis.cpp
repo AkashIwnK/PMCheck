@@ -1,10 +1,3 @@
-//==============================================================================//
-//
-// Looks for semantics that may detrimant performance of a system using
-// persistant memory or not. We also check  correct instructions
-// are used or not.  Use of incorrect type of instructions can cause slowdowns.
-//
-//=============================================================================//
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
@@ -29,7 +22,7 @@
 #include "SCC_Iterator.h"
 #include "FlowAwarePostOrder.h"
 #include "WriteAliasCheck.h"
-#include "PMModelVerifier.h"
+#include "TraceAnalysis.h"
 #include "InstsSet.h"
 #include "CommonSCCOps.h"
 #include "LibFuncValidityCheck.h"

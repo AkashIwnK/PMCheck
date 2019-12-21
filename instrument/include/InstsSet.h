@@ -1,12 +1,3 @@
-//========================== INSTRUCTION SETS ===========================//
-//
-//-----------------------------------------------------------------------//
-//
-// This file contains classes responsible for collecting instruction sets
-// for analyis or instrumentation.
-//
-//-----------------------------------------------------------------------//
-
 
 #ifndef INSTS_SETS_H_
 #define INSTS_SETS_H_

@@ -1,8 +1,3 @@
-//===----------------------------------------------------------------------===//
-//
-// Data structure graph nodes and some implementation of DSNodeHandle.
-//
-//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_ANALYSIS_DSNODE_H
 #define LLVM_ANALYSIS_DSNODE_H

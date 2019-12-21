@@ -1,9 +1,3 @@
-//============= Performance Checker for PMDK using applications ================//
-// 
-// Looks for semantics that may detrimant performance of a system using
-// persistant memory programming.
-//
-//===============================================================================//
 
 #ifndef PMDK_PERF_CHECKER_H_
 #define PMDK_PERF_CHECKER_H_

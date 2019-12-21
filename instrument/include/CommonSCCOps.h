@@ -1,12 +1,3 @@
-//=================== COMMON SCC OPERATIONS =====================//
-//
-//--------------------------------------------------------------//
-//
-// This contains some decalration of common operations that passes
-// perform on strongly connected components.
-//
-//==============================================================//
-
 
 #ifndef COMMON_SCC_OPS_H_
 #define COMMON_SCC_OPS_H_

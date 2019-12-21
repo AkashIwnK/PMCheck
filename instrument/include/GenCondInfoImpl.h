@@ -1,15 +1,3 @@
-//=============== Header file for getting a if-blocks forest ================//
-//
-//=====------------------------------------------------------------------=====//
-//
-// The following classes accounts for "natural" if-else or if-then blocks
-// and rare gotos. Loops are treated completely differently and if-headers that
-// are loop headers are not taken into account here. To use loops use LoopInfo.h.
-// Also, cond loops are implemented here. Cond Loops are, again, "natural" loops,
-// that are also hold info on cond block sets along with the other loop info in
-// LLVM LoopInfoBase and LoopBase.
-//
-//=====------------------------------------------------------------------=====//
 
 #ifndef GENCONDINFOIMPL_H__
 #define GENCONDINFOIMPL_H__

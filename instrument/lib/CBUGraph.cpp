@@ -1,12 +1,3 @@
-//===----------------------------------------------------------------------===//
-//
-// This is the exact same as the bottom-up graphs, but we use take a completed
-// call graph and inline all indirect callees into their callers graphs, making
-// the result more useful.
-//
-//===----------------------------------------------------------------------===//
-
-#define DEBUG_TYPE "cbudatastructure"
 
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Debug.h"
