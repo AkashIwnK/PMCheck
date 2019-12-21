@@ -34,17 +34,17 @@ typedef SmallVector<SCCToInstsPairTy, 16> SCCToInstsPairVectTy;
 // looking for certain persist operations and commit the accumulated sets
 // of persistent operations.
 void MergeAcrossSCCs(SCCToInstsPairVectTy &SCCToInstsPairVect,
-					 SCCToInstsPairVectTy &StopFreeSCCToInstsPairVect,
-					 SmallVector<BasicBlock *, 4> &BBWithFirstSerialInsts,
-					 DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap);
+		SCCToInstsPairVectTy &StopFreeSCCToInstsPairVect,
+		SmallVector<BasicBlock *, 4> &BBWithFirstSerialInsts,
+		DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap);
 
 // This function seperates the persist operations if they happen to be in condblock sets
 // because we cannot statically analyze the perisist operations in condblock sets, however,
 // they can be analyzed dynamically.
 void SeparateAcrossSCCsAndCondBlockSets(
-					SCCToInstsPairVectTy &StopFreeSCCToInstsPairVect,
-					DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
-					GenCondBlockSetLoopInfo &GI);
+		SCCToInstsPairVectTy &StopFreeSCCToInstsPairVect,
+		DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
+		GenCondBlockSetLoopInfo &GI);
 
 //}  // end of namespace llvm
 

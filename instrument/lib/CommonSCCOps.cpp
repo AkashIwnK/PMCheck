@@ -1,5 +1,4 @@
 //=================== COMMON SCC OPERATIONS =====================//
-//
 //--------------------------------------------------------------//
 //
 // This contains some common operations that passes perform on
@@ -27,17 +26,17 @@ using namespace llvm;
 // looking for certain persist operations and commit the accumulated sets
 // of persistent operations.
 void MergeAcrossSCCs(SCCToInstsPairVectTy &SCCToInstsPairVect,
-					 SCCToInstsPairVectTy &StopFreeSCCToInstsPairVect,
-					 SmallVector<BasicBlock *, 4> &BBWithFirstSerialInsts,
-					 DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap) {
-// Merges the serial persist instructions sets from two SCCs
+		SCCToInstsPairVectTy &StopFreeSCCToInstsPairVect,
+		SmallVector<BasicBlock *, 4> &BBWithFirstSerialInsts,
+		DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap) {
+	// Merges the serial persist instructions sets from two SCCs
 	auto MergeSCCPairs = [&](unsigned MergeIndex, unsigned RemoveIndex) {
 		SerialInstsSet<> &RemoveSF =
-					std::get<1>( StopFreeSCCToInstsPairVect[RemoveIndex]);
+			std::get<1>( StopFreeSCCToInstsPairVect[RemoveIndex]);
 		SerialInstsSet<> &MergeSF =
-					std::get<1>(StopFreeSCCToInstsPairVect[MergeIndex]);
+			std::get<1>(StopFreeSCCToInstsPairVect[MergeIndex]);
 
-	// Merge serial persist instructions sets through prepend copy
+		// Merge serial persist instructions sets through prepend copy
 		MergeSF.insert(MergeSF.begin(), RemoveSF.begin(), RemoveSF.end());
 	};
 
@@ -55,10 +54,10 @@ void MergeAcrossSCCs(SCCToInstsPairVectTy &SCCToInstsPairVect,
 			errs() << "\n";
 		}
 
-	// If the SCC has a single predecessor SCC with single exit, then we can serial
-	// persist instructions sets can be merged.
+		// If the SCC has a single predecessor SCC with single exit, then we can serial
+		// persist instructions sets can be merged.
 		if(BasicBlock *BB = SCCIterator.getSCCPredecessor()) {
-		// Merge
+			// Merge
 			errs() << "PREDESSECOR BB:";
 			BB->printAsOperand(errs(), false);
 			errs() << "\n";
@@ -67,7 +66,7 @@ void MergeAcrossSCCs(SCCToInstsPairVectTy &SCCToInstsPairVect,
 			for(; It_Index != StopFreeSCCToInstsPairVect.size(); It_Index++) {
 				auto &SCCToInstsPair = StopFreeSCCToInstsPairVect[It_Index];
 				if(PredSCC == std::get<0>(SCCToInstsPair)
-				&& It_Index != Index) {
+						&& It_Index != Index) {
 					break;
 				}
 			}
@@ -86,8 +85,8 @@ void MergeAcrossSCCs(SCCToInstsPairVectTy &SCCToInstsPairVect,
 			}
 		}
 
-	// We can also merge the SCCs with no writes with SCCs with no loops
-	// (single block exits to the current SCCs).
+		// We can also merge the SCCs with no writes with SCCs with no loops
+		// (single block exits to the current SCCs).
 		if(BasicBlock *BB = SCCIterator.getSCCExit()) {
 			if(find(BBWithFirstSerialInsts, BB) != BBWithFirstSerialInsts.end()) {
 				SCC_Iterator<Function *> ExitSCC = BlockToSCCMap[BB];
@@ -99,7 +98,7 @@ void MergeAcrossSCCs(SCCToInstsPairVectTy &SCCToInstsPairVect,
 						auto &SCCToInstsMergePair = StopFreeSCCToInstsPairVect[MergeIndex];
 						SerialInstsSet<> &MergeSF = std::get<1>(SCCToInstsMergePair);
 
-					// Merge serial persist instructions sets and  remove the remove index element
+						// Merge serial persist instructions sets and  remove the remove index element
 						for(auto &I : RemoveSF)
 							MergeSF.push_back(I);
 						SCCToInstsPairVect.erase(SCCToInstsPairVect.begin() + RemovalIndex);
@@ -109,25 +108,25 @@ void MergeAcrossSCCs(SCCToInstsPairVectTy &SCCToInstsPairVect,
 			}
 		}
 
-	// Finish up the merging process
+		// Finish up the merging process
 		if(SCCsMerged) {
 			errs() << "====SCCs MERGED\n";
 			errs() << "====MERGE   INDEX: " << MergeIndex << "\n";
 			errs() << "====REMOVAL INDEX: " << RemovalIndex << "\n";
 			errs() << "====SIZE: " << StopFreeSCCToInstsPairVect.size() << "\n";
 
-		// Update the scc iterator for the merged SCCs
+			// Update the scc iterator for the merged SCCs
 			auto &SCCToInstsRemovePair = StopFreeSCCToInstsPairVect[RemovalIndex];
 			auto &SCCToInstsMergePair = StopFreeSCCToInstsPairVect[MergeIndex];
 			auto &RemoveSCCIterator = std::get<0>(SCCToInstsRemovePair);
 			SerialInstsSet<> &MergeSF = std::get<1>(SCCToInstsMergePair);
 
-		// What SCC iterator we assign to this combination depends on  we have
-		// already covered the removed index or not. If not, we use that instead we
-		// leave the current index alone.
+			// What SCC iterator we assign to this combination depends on  we have
+			// already covered the removed index or not. If not, we use that instead we
+			// leave the current index alone.
 			if(RemovalIndex > MergeIndex) {
 				StopFreeSCCToInstsPairVect[MergeIndex] =
-									std::make_pair(RemoveSCCIterator, MergeSF);
+					std::make_pair(RemoveSCCIterator, MergeSF);
 			}
 
 			for(auto *BB : *RemoveSCCIterator) {
@@ -136,19 +135,19 @@ void MergeAcrossSCCs(SCCToInstsPairVectTy &SCCToInstsPairVect,
 				errs() << "\n";
 			}
 
-		// Remove the element if the SCCs have been merged
+			// Remove the element if the SCCs have been merged
 			errs() << "";
 			StopFreeSCCToInstsPairVect.erase(
 					StopFreeSCCToInstsPairVect.begin() + RemovalIndex);
 
 			errs() << "----SIZE: " << StopFreeSCCToInstsPairVect.size() << "\n";
 
-		// We decrement this index always because if RemovalIndex > MergeIndex, we use
-		// a new SCC iterator of the predecessor of the current SCC that we would need
-		// to deal with. And if RemovalIndex < MergeIndex, we must have covered the
-		// predecessor and current SCC, however we also removed an already convered SCC
-		// so the index of current SCC reduces by one. Moreoever, index will be incremented
-		// again in the top of this loop.
+			// We decrement this index always because if RemovalIndex > MergeIndex, we use
+			// a new SCC iterator of the predecessor of the current SCC that we would need
+			// to deal with. And if RemovalIndex < MergeIndex, we must have covered the
+			// predecessor and current SCC, however we also removed an already convered SCC
+			// so the index of current SCC reduces by one. Moreoever, index will be incremented
+			// again in the top of this loop.
 			Index--;
 		}
 	}
@@ -158,22 +157,22 @@ void MergeAcrossSCCs(SCCToInstsPairVectTy &SCCToInstsPairVect,
 // because we cannot statically analyze the perisist operations in condblock sets, however,
 // they can be analyzed dynamically.
 void SeparateAcrossSCCsAndCondBlockSets(
-					SCCToInstsPairVectTy &StopFreeSCCToInstsPairVect,
-					DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
-					GenCondBlockSetLoopInfo &GI) {
-// Set to record wehther a loop contains condblock sets with persist instructions
+		SCCToInstsPairVectTy &StopFreeSCCToInstsPairVect,
+		DenseMap<BasicBlock *, SCC_Iterator<Function *>> &BlockToSCCMap,
+		GenCondBlockSetLoopInfo &GI) {
+	// Set to record wehther a loop contains condblock sets with persist instructions
 	DenseSet<GenLoop *> LoopToCondBlockSetStatusSet;
 
-// Set to record wehther a loop contains condblock sets with persist instructions
+	// Set to record wehther a loop contains condblock sets with persist instructions
 	SmallVector<SCC_Iterator<Function *>, 4> SCCToCondBlockSetStatusSet;
 
-// Lambda function to separate serial instruction sets
+	// Lambda function to separate serial instruction sets
 	auto SeparateInstructionSets = [](SCCToInstsPairTy &SCCToInstsPair,
-								SerialInstsSet<>::iterator &SFI,
-								SCCToInstsPairVectTy &PairVect) {
-	// We remove this instruction from the set and
-	// all the subsequent persist instructions from this set and append
-	// it to the vector.
+			SerialInstsSet<>::iterator &SFI,
+			SCCToInstsPairVectTy &PairVect) {
+		// We remove this instruction from the set and
+		// all the subsequent persist instructions from this set and append
+		// it to the vector.
 		auto &SF = std::get<1>(SCCToInstsPair);
 		auto &SCCIterator = std::get<0>(SCCToInstsPair);
 		SerialInstsSet<> NewSF;
@@ -183,46 +182,46 @@ void SeparateAcrossSCCsAndCondBlockSets(
 		PairVect.push_back(std::make_pair(SCCIterator, NewSF));
 	};
 
-// Now we look for individual loops and condblock sets in the SCCs and separate
-// persist instructions sets out across loop and condblock set boundaries.
+	// Now we look for individual loops and condblock sets in the SCCs and separate
+	// persist instructions sets out across loop and condblock set boundaries.
 	auto SeparateInstructionSetsAcrossCondBlockSets =
-										[&](SCCToInstsPairTy &SCCToInstsPair,
-											SCCToInstsPairVectTy &PairVect) {
-	// If there is only one instruction, just move on
-		auto &SF = std::get<1>(SCCToInstsPair);
-		if(SF.size() == 1)
-			return;
-
-		GenCondBlockSet *CBS = GI.getCondBlockSetFor(SF[0]->getParent());
-		SerialInstsSet<>::iterator SFI = SF.begin();
-		for(Instruction *FI : SF) {
-			errs() << "PARENT: ";
-			FI->getParent()->printAsOperand(errs(), false);
-			errs() << " ";
-			errs() << "FLUSH: ";
-			FI->print(errs());
-			errs() << "\n";
-			GenCondBlockSet *GCBS = GI.getCondBlockSetFor(FI->getParent());
-
-		// Deal with condblock sets
-			if(GCBS != CBS) {
-			// Separate the instruction sets
-				errs() << "HERE\n";
-				SeparateInstructionSets(SCCToInstsPair, SFI, PairVect);
-
-			// Now we also record the loops these condblock sets happen
-			// to be in.
-				LoopToCondBlockSetStatusSet.insert(GI.getLoopFor(FI->getParent()));
-				SCCToCondBlockSetStatusSet.push_back(BlockToSCCMap[FI->getParent()]);
+		[&](SCCToInstsPairTy &SCCToInstsPair,
+				SCCToInstsPairVectTy &PairVect) {
+			// If there is only one instruction, just move on
+			auto &SF = std::get<1>(SCCToInstsPair);
+			if(SF.size() == 1)
 				return;
+
+			GenCondBlockSet *CBS = GI.getCondBlockSetFor(SF[0]->getParent());
+			SerialInstsSet<>::iterator SFI = SF.begin();
+			for(Instruction *FI : SF) {
+				errs() << "PARENT: ";
+				FI->getParent()->printAsOperand(errs(), false);
+				errs() << " ";
+				errs() << "FLUSH: ";
+				FI->print(errs());
+				errs() << "\n";
+				GenCondBlockSet *GCBS = GI.getCondBlockSetFor(FI->getParent());
+
+				// Deal with condblock sets
+				if(GCBS != CBS) {
+					// Separate the instruction sets
+					errs() << "HERE\n";
+					SeparateInstructionSets(SCCToInstsPair, SFI, PairVect);
+
+					// Now we also record the loops these condblock sets happen
+					// to be in.
+					LoopToCondBlockSetStatusSet.insert(GI.getLoopFor(FI->getParent()));
+					SCCToCondBlockSetStatusSet.push_back(BlockToSCCMap[FI->getParent()]);
+					return;
+				}
+				SFI++;
 			}
-			SFI++;
-		}
-	};
+		};
 
 	auto SeparateInstructionSetsAcrossLoopsAndSCCs = [&](SCCToInstsPairTy &SCCToInstsPair,
-												   SCCToInstsPairVectTy &PairVect) {
-	// If there is only one instruction, just move on
+			SCCToInstsPairVectTy &PairVect) {
+		// If there is only one instruction, just move on
 		auto &SF = std::get<1>(SCCToInstsPair);
 		if(SF.size() == 1)
 			return;
@@ -240,10 +239,10 @@ void SeparateAcrossSCCsAndCondBlockSets(
 			GenLoop *GL = GI.getLoopFor(FI->getParent());
 			SCC_Iterator<Function *> SCCIterator = BlockToSCCMap[FI->getParent()];
 
-		// Deal with the SCCs
+			// Deal with the SCCs
 			if(SCCIterator != SCCIt) {
 				if(find(SCCToCondBlockSetStatusSet, SCCIterator) != SCCToCondBlockSetStatusSet.end()
-				|| find(SCCToCondBlockSetStatusSet, SCCIt) != SCCToCondBlockSetStatusSet.end()) {
+						|| find(SCCToCondBlockSetStatusSet, SCCIt) != SCCToCondBlockSetStatusSet.end()) {
 					SeparateInstructionSets(SCCToInstsPair, SFI, PairVect);
 					return;
 				}
@@ -252,7 +251,7 @@ void SeparateAcrossSCCsAndCondBlockSets(
 				continue;
 			}
 
-		// Deal with loops
+			// Deal with loops
 			if(GL != L) {
 				if(!GL || (L && GL->contains(L))) {
 					errs() << "NEST 1\n";
@@ -275,7 +274,7 @@ void SeparateAcrossSCCsAndCondBlockSets(
 					continue;
 				}
 				if((GL && LoopToCondBlockSetStatusSet.find(GL) != LoopToCondBlockSetStatusSet.end())
-				|| (L && LoopToCondBlockSetStatusSet.find(L) != LoopToCondBlockSetStatusSet.end())) {
+						|| (L && LoopToCondBlockSetStatusSet.find(L) != LoopToCondBlockSetStatusSet.end())) {
 					errs() << "SEPARATE LOOPS\n";
 					SeparateInstructionSets(SCCToInstsPair, SFI, PairVect);
 					return;
@@ -286,7 +285,7 @@ void SeparateAcrossSCCsAndCondBlockSets(
 		}
 	};
 
-// Iterate over the serial persist instructions sets
+	// Iterate over the serial persist instructions sets
 	for(unsigned Index = 0; Index != StopFreeSCCToInstsPairVect.size(); ++Index) {
 		auto &SCCToInstsPair = StopFreeSCCToInstsPairVect[Index];
 		errs() << "ITERATING\n";
@@ -294,7 +293,7 @@ void SeparateAcrossSCCsAndCondBlockSets(
 		errs() << "--SIZE: " << StopFreeSCCToInstsPairVect.size() << "\n";
 	}
 
-// Iterate over the serial persist instructions sets again
+	// Iterate over the serial persist instructions sets again
 	for(unsigned Index = 0; Index != StopFreeSCCToInstsPairVect.size(); ++Index) {
 		auto &SCCToInstsPair = StopFreeSCCToInstsPairVect[Index];
 		errs() << "ITERATING\n";

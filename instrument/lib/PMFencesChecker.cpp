@@ -1,4 +1,4 @@
-//============= Performance Checker for PMDK using applications ================//
+//=============================================================================/
 //
 // Looks for semantics that may detrimant performance of a system using
 // persistant memory or not. We also check whether correct instructions
@@ -73,8 +73,8 @@ using namespace llvm;
 // the ones that do not dominate any stores in the loop.
 //
 static void LookForFencesInLoops(GenCondBlockSetLoopInfo &GI,
-								 DominatorTree &DT, PMInterfaces<> &PMI, AAResults &AA,
-								 SmallVector<Value *, 16> StackAndGlobalVarVect) {
+		DominatorTree &DT, PMInterfaces<> &PMI, AAResults &AA,
+		SmallVector<Value *, 16> StackAndGlobalVarVect) {
 	errs() << "\n\n\n\n";
 	auto &FI = PMI.getFlushInterface();
 	auto &MI = PMI.getMsyncInterface();
@@ -83,7 +83,7 @@ static void LookForFencesInLoops(GenCondBlockSetLoopInfo &GI,
 	auto &PI = PMI.getPersistInterface();
 	auto &MPI = PMI.getMapInterface();
 
-// Lambda function to get the line number. We use debug information to do so.
+	// Lambda function to get the line number. We use debug information to do so.
 	auto GetLineNumber = [](Instruction &I) {
 		if(MDNode *N = I.getMetadata("dbg")) {
 			if(DILocation *Loc = dyn_cast<DILocation>(N))
@@ -102,8 +102,8 @@ static void LookForFencesInLoops(GenCondBlockSetLoopInfo &GI,
 			continue;
 
 		if(!LoopsToLatchStatusMap.empty()
-		&& !LoopsToLatchStatusMap[L] && L->isLoopLatch(BB)) {
-		// Set a "checkpoint" here
+				&& !LoopsToLatchStatusMap[L] && L->isLoopLatch(BB)) {
+			// Set a "checkpoint" here
 			if(SetCheckPoint) {
 				CheckPoint = BB->getTerminator();
 				errs() << "CHECK POINT: ";
@@ -126,12 +126,12 @@ static void LookForFencesInLoops(GenCondBlockSetLoopInfo &GI,
 						continue;
 
 					errs() << "STORE INSTRUCTION FOUND\n";
-				// If a fence has been discovered, then we skip this block
+					// If a fence has been discovered, then we skip this block
 					WriteFound = true;
 					errs() << "VECT SIZE: " << FenceInstsVect.size() << "\n";
 					if(unsigned Size = FenceInstsVect.size()) {
 						if(FenceFound) {
-						// Pop the flush instruction
+							// Pop the flush instruction
 							FenceInstsVect.pop_back();
 						} else {
 							errs() << "FENCE FOUND\n";
@@ -139,39 +139,39 @@ static void LookForFencesInLoops(GenCondBlockSetLoopInfo &GI,
 						}
 					}
 					errs() << "FENCE TO BE FOUND\n";
-				// We try to find fence in this block. If we do not find it,
-				// we can skip the loop altogether.
+					// We try to find fence in this block. If we do not find it,
+					// we can skip the loop altogether.
 					FenceToBeFound = true;
 					continue;
 				}
 				if(CallInst *CI = dyn_cast<CallInst>(&I)) {
-				// Ignore the instrinsics that are not writing to memory
+					// Ignore the instrinsics that are not writing to memory
 					if(dyn_cast<IntrinsicInst>(CI)
-					&& !dyn_cast<AnyMemIntrinsic>(CI)) {
+							&& !dyn_cast<AnyMemIntrinsic>(CI)) {
 						continue;
 					}
 
-				// Skip the following functions and calls that do not change memory
+					// Skip the following functions and calls that do not change memory
 					if(MI.isValidInterfaceCall(CI)
-					|| DI.isValidInterfaceCall(CI)
-					|| PI.isValidInterfaceCall(CI)
-					|| MPI.isValidInterfaceCall(CI)
-					|| CI->getCalledFunction()->onlyReadsMemory()) {
+							|| DI.isValidInterfaceCall(CI)
+							|| PI.isValidInterfaceCall(CI)
+							|| MPI.isValidInterfaceCall(CI)
+							|| CI->getCalledFunction()->onlyReadsMemory()) {
 						continue;
 					}
 
-				// If the call is a recognizable memory operation that is
-				// capable of writing to stack and globals, we need to
-				// perform alias analysis here.
+					// If the call is a recognizable memory operation that is
+					// capable of writing to stack and globals, we need to
+					// perform alias analysis here.
 					if(!PMMI.isValidInterfaceCall(CI)
-					&& WriteAliases(CI, StackAndGlobalVarVect, AA)) {
+							&& WriteAliases(CI, StackAndGlobalVarVect, AA)) {
 						continue;
 					}
 
 					if(FI.isValidInterfaceCall(CI)) {
 						errs() << "FENCE INSTRUCTION FOUND\n";
-					// Fence found!	If the fence is in a condblock set in the
-					// current loop, then there is nothing we can do about it.
+						// Fence found!	If the fence is in a condblock set in the
+						// current loop, then there is nothing we can do about it.
 						if(auto *CondBlockSet = GI.getCondBlockSetFor(BB)) {
 							errs() << "FENCE IN CONDBLOCK SET\n";
 							if(CondBlockSet->contains(L)) {
@@ -184,13 +184,13 @@ static void LookForFencesInLoops(GenCondBlockSetLoopInfo &GI,
 									FenceToBeFound = false;
 							} else {
 								errs() << "CONDBLOCK SET DOES NOT CONTAIN THE LOOP\n";
-							// This means that the fence is in a condblock set
-							// in a loop. So we move on.
+								// This means that the fence is in a condblock set
+								// in a loop. So we move on.
 								//LatchFound = false;
 								break;
 							}
 						} else {
-						// Fence found. Have we discovered a store already?
+							// Fence found. Have we discovered a store already?
 							errs() << "FENCE NOT IN CONDBLOCK SET\n";
 							errs() << "FENCE SET\n";
 							//FenceInst = CI;
@@ -202,14 +202,14 @@ static void LookForFencesInLoops(GenCondBlockSetLoopInfo &GI,
 						continue;
 					}
 
-				// If a fence has been discovered, then we skip this block.
-				// We have to make sure that the stores and fences are in the
-				// same loop.
+					// If a fence has been discovered, then we skip this block.
+					// We have to make sure that the stores and fences are in the
+					// same loop.
 					WriteFound = true;
 					errs() << "VECT SIZE: " << FenceInstsVect.size() << "\n";
 					if(unsigned Size = FenceInstsVect.size()) {
 						if(FenceFound) {
-						// Pop the flush instruction
+							// Pop the flush instruction
 							FenceInstsVect.pop_back();
 						} else {
 							errs() << "FENCE FOUND\n";
@@ -217,8 +217,8 @@ static void LookForFencesInLoops(GenCondBlockSetLoopInfo &GI,
 						}
 					}
 
-				// We try to find fence in this block. If we do not find it,
-				// we can skip the loop altogether.
+					// We try to find fence in this block. If we do not find it,
+					// we can skip the loop altogether.
 					errs() << "FENCE TO BE FOUND\n";
 					FenceToBeFound = true;
 					continue;
@@ -226,26 +226,26 @@ static void LookForFencesInLoops(GenCondBlockSetLoopInfo &GI,
 			}
 			errs() << "BASIC BLOCK DONE\n";
 			if(FenceToBeFound) {
-			// Fence was not found. Skip the loop.
+				// Fence was not found. Skip the loop.
 				LoopsToLatchStatusMap[L] = false;
 				SetCheckPoint = true;
 				errs() << "-------FENCE TO BE FOUND\n";
 			} else {
 				errs() << "-------FENCE NOT TO BE FOUND\n";
 				if(WriteFound
-				|| (BB == L->getHeader() && LoopsToLatchStatusMap[L])) {
+						|| (BB == L->getHeader() && LoopsToLatchStatusMap[L])) {
 					LoopsToLatchStatusMap[L] = false;
 					if(!FenceInstsVect.empty()) {
 						Instruction *FenceInst = FenceInstsVect.back();
 						FenceInstsVect.pop_back();
 						SetCheckPoint = true;
 						errs() << "---------- FENCE\n";
-					// Fence has been found with no store succeeding it.
-					// We need to get the line number as well. We do that
-					// with the help of debug info.
+						// Fence has been found with no store succeeding it.
+						// We need to get the line number as well. We do that
+						// with the help of debug info.
 						if(ConstantInt *CI = GetLineNumber(*FenceInst)) {
 							errs() << "Fence at line " << CI->getSExtValue()
-									<< " can be sunk out of the loop";
+								<< " can be sunk out of the loop";
 							if(CI = GetLineNumber(*CheckPoint))
 								errs() << " at line " << CI->getSExtValue();
 							errs() << "\n";
@@ -264,47 +264,47 @@ static void LookForFencesInLoops(GenCondBlockSetLoopInfo &GI,
 // This can be run independently through opt utility
 char FenceCheckerPass::ID = 0;
 static RegisterPass<FenceCheckerPass> PassObj("FenceCheck",
-							"Perform Check on Fences in Loops");
+		"Perform Check on Fences in Loops");
 
 // Initialze the the legacy pass
 char FenceCheckerLegacyPass::ID = 0;
 
 INITIALIZE_PASS_BEGIN(FenceCheckerLegacyPass, "FenceCheckerWrapper",
-                "Perform Check on Fences in Loops", true, true)
-INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
+		"Perform Check on Fences in Loops", true, true)
+	INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(GenCondBlockSetLoopInfoWrapperPass)
-INITIALIZE_PASS_END(FenceCheckerLegacyPass, "FenceCheckerWrapper",
-               "Perform Check on Fences in Loops", true, true)
+	INITIALIZE_PASS_END(FenceCheckerLegacyPass, "FenceCheckerWrapper",
+			"Perform Check on Fences in Loops", true, true)
 
 
-bool FenceCheckerPass::runOnFunction(Function &F) {
-	if(F.isDeclaration())
-		return false;
+	bool FenceCheckerPass::runOnFunction(Function &F) {
+		if(F.isDeclaration())
+			return false;
 
-	DominatorTree &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-	errs() << "GOT Dominator tree\n";
-	auto &GI =
-		getAnalysis<GenCondBlockSetLoopInfoWrapperPass>().getGenCondInfoWrapperPassInfo();
-	auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
+		DominatorTree &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+		errs() << "GOT Dominator tree\n";
+		auto &GI =
+			getAnalysis<GenCondBlockSetLoopInfoWrapperPass>().getGenCondInfoWrapperPassInfo();
+		auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
 
-// Get all the globals and allocas in the function
-	SmallVector<Value *, 16> StackAndGlobalVarVect;
-	for(Module::global_iterator It = F.getParent()->global_begin();
-								It != F.getParent()->global_end(); It++) {
-		if(GlobalVariable *GV = dyn_cast<GlobalVariable>(&*It))
-			StackAndGlobalVarVect.push_back(GV);
-	}
-	for(auto &BB : F) {
-		for(auto &I : BB) {
-			if(AllocaInst *AI = dyn_cast<AllocaInst>(&I))
-				StackAndGlobalVarVect.push_back(AI);
+		// Get all the globals and allocas in the function
+		SmallVector<Value *, 16> StackAndGlobalVarVect;
+		for(Module::global_iterator It = F.getParent()->global_begin();
+				It != F.getParent()->global_end(); It++) {
+			if(GlobalVariable *GV = dyn_cast<GlobalVariable>(&*It))
+				StackAndGlobalVarVect.push_back(GV);
 		}
+		for(auto &BB : F) {
+			for(auto &I : BB) {
+				if(AllocaInst *AI = dyn_cast<AllocaInst>(&I))
+					StackAndGlobalVarVect.push_back(AI);
+			}
+		}
+
+		LookForFencesInLoops(GI, DT, PMI, AA, StackAndGlobalVarVect);
+
+		return false;
 	}
-
-	LookForFencesInLoops(GI, DT, PMI, AA, StackAndGlobalVarVect);
-
-	return false;
-}
 
 bool FenceCheckerLegacyPass::runOnFunction(Function &F) {
 	if(!F.size())
@@ -315,16 +315,16 @@ bool FenceCheckerLegacyPass::runOnFunction(Function &F) {
 	DominatorTree &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 	errs() << "--WORKING\n";
 	//initializeGenCondBlockSetLoopInfoWrapperPassPass(
-		//						*PassRegistry::getPassRegistry());
+	//						*PassRegistry::getPassRegistry());
 	errs() << "WORKING\n";
 	GenCondBlockSetLoopInfo &GI =
 		getAnalysis<GenCondBlockSetLoopInfoWrapperPass>().getGenCondInfoWrapperPassInfo();
 	auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
 
-// Get all the globals and allocas in the function
+	// Get all the globals and allocas in the function
 	SmallVector<Value *, 16> StackAndGlobalVarVect;
 	for(Module::global_iterator It = F.getParent()->global_begin();
-								It != F.getParent()->global_end(); It++) {
+			It != F.getParent()->global_end(); It++) {
 		if(GlobalVariable *GV = dyn_cast<GlobalVariable>(&*It))
 			StackAndGlobalVarVect.push_back(GV);
 	}

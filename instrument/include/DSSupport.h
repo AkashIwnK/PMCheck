@@ -38,14 +38,11 @@ class DSNode;                  // Each node in the graph
 //class DSGraph;                 // A graph for a function
 class ReachabilityCloner;
 
-namespace DS { // FIXME: After the paper, this should get cleaned up
+namespace DS { 
   enum { PointerShift = 2,     // 64bit ptrs = 3, 32 bit ptrs = 2
          PointerSize = 1 << PointerShift
   };
 
-  /// isPointerType - Return true if this first class type is big enough to hold
-  /// a pointer.
-  ///
   bool isPointerType(const Type *Ty);
 };
 
@@ -59,7 +56,6 @@ namespace DS { // FIXME: After the paper, this should get cleaned up
 /// defined in DSNode.h because they need knowledge of DSNode operation. Putting
 /// them in a CPP file wouldn't help making them inlined and keeping DSNode and
 /// DSNodeHandle (and friends) in one file complicates things.
-///
 class DSNodeHandle {
   mutable DSNode *N;
   mutable unsigned Offset;
@@ -101,9 +97,6 @@ public:
     std::swap(N, NH.N);
   }
 
-  /// isNull - Check to see if getNode() == 0, without going through the trouble
-  /// of checking to see if we are forwarding...
-  ///
   bool isNull() const { return N == 0; }
 
   // Allow explicit conversion to DSNode...
@@ -126,26 +119,17 @@ public:
   void addEdgeTo(unsigned LinkNo, const DSNodeHandle &N);
   void addEdgeTo(const DSNodeHandle &N) { addEdgeTo(0, N); }
 
-  /// mergeWith - Merge the logical node pointed to by 'this' with the node
-  /// pointed to by 'N'.
-  ///
   void mergeWith(const DSNodeHandle &N) const;
-
-  /// hasLink - Return true if there is a link at the specified offset...
-  ///
+  
   inline bool hasLink(unsigned Num) const;
 
-  /// getLink - Treat this current node pointer as a pointer to a structure of
-  /// some sort.  This method will return the pointer a mem[this+Num]
-  ///
   inline const DSNodeHandle &getLink(unsigned Num) const;
   inline DSNodeHandle &getLink(unsigned Num);
   inline void setLink(unsigned Num, const DSNodeHandle &NH);
 
 private:
   DSNode *HandleForwarding() const;
-  /// isForwarding - Return true if this NodeHandle is forwarding to another
-  /// one.
+  
   bool isForwarding() const;
 };
 
@@ -155,18 +139,6 @@ namespace std {
   template<>
   inline void swap<llvm::DSNodeHandle>(llvm::DSNodeHandle &NH1, llvm::DSNodeHandle &NH2) { NH1.swap(NH2); }
 }
-
-// Deprecated?
-/*
-namespace HASH_NAMESPACE {
-  // Provide a hash function for arbitrary pointers...
-  template <> struct hash<llvm::DSNodeHandle> {
-    inline size_t operator()(const llvm::DSNodeHandle &Val) const {
-      return hash<void*>()(Val.getNode()) ^ Val.getOffset();
-    }
-  };
-}
-*/
 
 namespace llvm {
 
@@ -205,9 +177,6 @@ class DSCallSite {
   DSCallSite();                         // DO NOT IMPLEMENT
 
 public:
-  /// Constructor.  Note - This ctor destroys the argument vector passed in.  On
-  /// exit, the argument vector is empty.
-  ///
   DSCallSite(CallSite CS, const DSNodeHandle &rv, DSNode *Callee,
              std::vector<DSNodeHandle> &Args)
     : Site(CS), CalleeF(0), CalleeN(Callee), RetVal(rv) {
@@ -226,10 +195,6 @@ public:
     : Site(DSCS.Site), CalleeF(DSCS.CalleeF), CalleeN(DSCS.CalleeN),
       RetVal(DSCS.RetVal), CallArgs(DSCS.CallArgs) {}
 
-  /// Mapping copy constructor - This constructor takes a preexisting call site
-  /// to copy plus a map that specifies how the links should be transformed.
-  /// This is useful when moving a call site from one graph to another.
-  ///
   template<typename MapTy>
   DSCallSite(const DSCallSite &FromCall, MapTy &NodeMap) {
     Site = FromCall.Site;
@@ -250,10 +215,6 @@ public:
     return *this;
   }
 
-  /// isDirectCall - Return true if this call site is a direct call of the
-  /// function specified by getCalleeFunc.  If not, it is an indirect call to
-  /// the node specified by getCalleeNode.
-  ///
   bool isDirectCall() const { return CalleeF != 0; }
 
   bool isIndirectCall() const { return !isDirectCall(); }
@@ -297,9 +258,6 @@ public:
     }
   }
 
-  /// mergeWith - Merge the return value and parameters of the these two call
-  /// sites.
-  ///
   void mergeWith(DSCallSite &CS) {
     getRetVal().mergeWith(CS.getRetVal());
     unsigned MinArgs = getNumPtrArgs();
@@ -310,10 +268,6 @@ public:
       CallArgs.push_back(CS.getPtrArg(a));
   }
 
-  /// markReachableNodes - This method recursively traverses the specified
-  /// DSNodes, marking any nodes which are reachable.  All reachable nodes it
-  /// adds to the set, which allows it to only traverse visited nodes once.
-  ///
   void markReachableNodes(std::unordered_set<const DSNode*> &Nodes) const;
 
   bool operator<(const DSCallSite &CS) const {
@@ -338,6 +292,7 @@ public:
 };
 
 } // End llvm namespace
+
 namespace std {
   template<>
   inline void swap<llvm::DSCallSite>(llvm::DSCallSite &CS1,

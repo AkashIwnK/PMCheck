@@ -1,5 +1,3 @@
-//========================== WRITE ALIAS CHECK ===========================//
-//
 //------------------------------------------------------------------------//
 //
 // This contains a function for checking whether an instruction that

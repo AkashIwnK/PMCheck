@@ -1,6 +1,3 @@
-//===- DSGraph.h - Represent a collection of data structures ----*- C++ -*-===//
-//
-//
 //===----------------------------------------------------------------------===//
 //
 // This header defines the data structure graph (DSGraph) and the
@@ -20,7 +17,6 @@
 
 #include <unordered_map>
 #include <unordered_set>
-//#include <unordered_multimap>
 #include <list>
 #include <vector>
 
@@ -39,7 +35,6 @@ namespace llvm {
 /// these cases, the cost of iterating over the scalar map dominates the cost
 /// of DSA.  In all of these cases, the DSA phase is really trying to identify
 /// globals or unique node handles active in the function.
-///
 class DSScalarMap {
   typedef std::unordered_map<Value*, DSNodeHandle> ValueMapTy;
   ValueMapTy ValueMap;
@@ -115,7 +110,6 @@ public:
 
   /// replaceScalar - When an instruction needs to be modified, this method can
   /// be used to update the scalar map to remove the old and insert the new.
-  ///
   void replaceScalar(Value *Old, Value *New) {
     iterator I = find(Old);
     assert(I != end() && "Old value is not in the map!");
@@ -249,7 +243,6 @@ public:
   // Note that a copied graph does not retain the GlobalsGraph pointer of the
   // source.  You need to set a new GlobalsGraph with the setGlobalsGraph
   // method.
-  //
   DSGraph(const DSGraph &DSG, EquivalenceClasses<GlobalValue*> &ECs,
           unsigned CloneFlags = 0);
 
@@ -266,11 +259,9 @@ public:
   }
 
   /// getDataLayout - Return the DataLayout object for the current target.
-  ///
   const DataLayout &getDataLayout() const { return DL; }
 
   /// getTargetLibraryInfo - Return the target library info.
-  ///
   const TargetLibraryInfo &getTargetLibraryInfo() const { return TLI; }
 
   /// getContext - Return the Context object for the current program.
@@ -278,7 +269,6 @@ public:
 
   /// setPrintAuxCalls - If you call this method, the auxillary call vector will
   /// be printed instead of the standard call vector to the dot file.
-  ///
   void setPrintAuxCalls() { PrintAuxCalls = true; }
 
   bool shouldPrintAuxCalls() const { return PrintAuxCalls; }
@@ -296,33 +286,28 @@ public:
   node_const_iterator node_end()   const { return Nodes.end(); }
 
   /// getFunctionNames - Return a space separated list of the name of the
-  /// functions in this graph (if any)
-  ///
+  /// functions in this graph (if any).
   std::string getFunctionNames() const;
 
   /// addNode - Add a new node to the graph.
-  ///
   void addNode(DSNode *N) { Nodes.push_back(N); }
 
   void unlinkNode(DSNode *N) { Nodes.erase(std::find(Nodes.begin(), Nodes.end(), N)); }
 
   /// getScalarMap - Get a map that describes what the nodes the scalars in this
-  /// function point to...
-  ///
+  /// function point to.
   ScalarMapTy &getScalarMap() { return ScalarMap; }
 
   const ScalarMapTy &getScalarMap() const { return ScalarMap; }
 
   /// getFunctionCalls - Return the list of call sites in the original local
-  /// graph...
-  ///
+  /// graph.
   const std::list<DSCallSite> &getFunctionCalls() const { return FunctionCalls;}
 
   std::list<DSCallSite> &getFunctionCalls() { return FunctionCalls;}
 
   /// getAuxFunctionCalls - Get the call sites as modified by whatever passes
   /// have been run.
-  ///
   std::list<DSCallSite> &getAuxFunctionCalls() { return AuxFunctionCalls; }
 
   const std::list<DSCallSite> &getAuxFunctionCalls() const {
@@ -341,7 +326,6 @@ public:
 
   /// getNodeForValue - Given a value that is used or defined in the body of the
   /// current function, return the DSNode that it points to.
-  ///
   DSNodeHandle &getNodeForValue(Value *V) { return ScalarMap[V]; }
 
   const DSNodeHandle &getNodeForValue(Value *V) const {
@@ -359,12 +343,10 @@ public:
 
   /// getReturnNodes - Return the mapping of functions to their return nodes for
   /// this graph.
-  ///
   const ReturnNodesTy &getReturnNodes() const { return ReturnNodes; }
         ReturnNodesTy &getReturnNodes()       { return ReturnNodes; }
 
   /// getReturnNodeFor - Return the return node for the specified function.
-  ///
   DSNodeHandle &getReturnNodeFor(Function &F) {
     ReturnNodesTy::iterator I = ReturnNodes.find(&F);
     assert(I != ReturnNodes.end() && "F not in this DSGraph!");
@@ -384,7 +366,6 @@ public:
   }
 
   /// getGraphSize - Return the number of nodes in this graph.
-  ///
   unsigned getGraphSize() const {
     return Nodes.size();
   }

@@ -1,20 +1,9 @@
-//===- DSGraphTraits.h - Provide generic graph interface --------*- C++ -*-===//
-//
-//
-//===----------------------------------------------------------------------===//
-//
-// This file provides GraphTraits specializations for the DataStructure graph
-// nodes, allowing datastructure graphs to be processed by generic graph
-// algorithms.
-//
-//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_ANALYSIS_DSGRAPHTRAITS_H
 #define LLVM_ANALYSIS_DSGRAPHTRAITS_H
 
 #include "DSGraph.h"
 #include "llvm/ADT/GraphTraits.h"
-//#include "llvm/ADT/iterator"
 #include "llvm/ADT/STLExtras.h"
 
 namespace llvm {

@@ -23,26 +23,26 @@ using namespace llvm;
 template<class BlockT, class GraphNodeT,  class GenInfoT>
 std::vector<BlockT *>
 FlowAwarePostOrderVect(const GraphNodeT &G, const GenInfoT &GI) {
-// Vector to order the basic blocks in post-order form
+	// Vector to order the basic blocks in post-order form
 	std::vector<BlockT *> PostOrderedBBs;
 
-// Map every condblock to the tail of the condblock set it is contained in
+	// Map every condblock to the tail of the condblock set it is contained in
 	DenseMap<BlockT *, SmallVector<BlockT *, 16>> TailToBlocksMap;
 
-// Keep track of the head and tail top-level of condblock set
+	// Keep track of the head and tail top-level of condblock set
 	BlockT *OuterCBSHeader = nullptr;
 	BlockT *OuterCBSTail = nullptr;
 
-// Function to add a condblock set and all its sub-condblock sets
-// into the vector with post-ordered blocks.
+	// Function to add a condblock set and all its sub-condblock sets
+	// into the vector with post-ordered blocks.
 	auto AddPostOrderedBlocks = [&](BlockT *StartTail) {
-	// Add the start tail
+		// Add the start tail
 		errs() << "TAIL BLOCK ADDED: ";
 		StartTail->printAsOperand(errs(), false);
 		errs() << "\n";
 		PostOrderedBBs.push_back(StartTail);
 
-	// Put all the blocks in the post order blocks vector recursively
+		// Put all the blocks in the post order blocks vector recursively
 		typedef std::pair<BlockT *, unsigned> TailToIndexPairTy;
 		SmallVector<TailToIndexPairTy, 8> TailsToIndexPairStack;
 		TailsToIndexPairStack.push_back(std::make_pair(StartTail, 0));
@@ -64,7 +64,7 @@ FlowAwarePostOrderVect(const GraphNodeT &G, const GenInfoT &GI) {
 					continue;
 				}
 
-			// This block is a tail. So check map again.
+				// This block is a tail. So check map again.
 				errs() << "TAIL FOUND\n";
 				TailsToIndexPairStack.push_back(std::make_pair(Tail, Index + 1));
 				TailsToIndexPairStack.push_back(std::make_pair(Block, 0));
@@ -74,21 +74,21 @@ FlowAwarePostOrderVect(const GraphNodeT &G, const GenInfoT &GI) {
 		}
 	};
 
-// Iterate graph in post-order
+	// Iterate graph in post-order
 	for(auto &Node : post_order(G)) {
 		BasicBlock *BB = Node->getBlock();
 		BB->printAsOperand(errs(), false);
 		errs() << "\n";
 
-	// Reached the top of what we were supposed to iterate over
+		// Reached the top of what we were supposed to iterate over
 		if(BB == G->getBlock()) {
 			errs() << "ROOT REACHED\n";
-		// If this block is a condblock set header, then
+			// If this block is a condblock set header, then
 			if(GI.isCondBlockSetHeader(BB)) {
-			// Get the tail corresponding to this condblock set
+				// Get the tail corresponding to this condblock set
 				auto *CBS = GI.getCondBlockSetFor(BB->getTerminator()->getSuccessor(0));
 
-			// Consider the case in which we deal with a condblock set with triangle case
+				// Consider the case in which we deal with a condblock set with triangle case
 				if(!CBS || CBS->getHeader() != BB)
 					CBS = GI.getCondBlockSetFor(BB->getTerminator()->getSuccessor(1));
 				errs() << "BB IS CONDBLOCK SET HEADER\n";
@@ -98,7 +98,7 @@ FlowAwarePostOrderVect(const GraphNodeT &G, const GenInfoT &GI) {
 					AddPostOrderedBlocks(Tail);
 			}
 
-		// Add the current block
+			// Add the current block
 			errs() << "--BLOCK ADDED: ";
 			BB->printAsOperand(errs(), false);
 			errs() << "\n";
@@ -112,8 +112,8 @@ FlowAwarePostOrderVect(const GraphNodeT &G, const GenInfoT &GI) {
 				errs() << "BLOCK QUEUED\n";
 				continue;
 			} else {
-			// This is a condblock set without a tail. Check to see if the
-			// condblock set has a parent condblock set that has a tail.
+				// This is a condblock set without a tail. Check to see if the
+				// condblock set has a parent condblock set that has a tail.
 				auto *ParentCBS = CBS->getParentCondBlockSet();
 				while(ParentCBS && !ParentCBS->getTail())
 					ParentCBS = ParentCBS->getParentCondBlockSet();
@@ -125,24 +125,24 @@ FlowAwarePostOrderVect(const GraphNodeT &G, const GenInfoT &GI) {
 				}
 			}
 		} else {
-		// If the current block is a tail, track the outermost tail
-		// and the header of the condblock set.
+			// If the current block is a tail, track the outermost tail
+			// and the header of the condblock set.
 			if(GI.isCondBlockSetTail(BB)) {
-			// This works because for a top-level condblock set, head always
-			// dominates its tail.
+				// This works because for a top-level condblock set, head always
+				// dominates its tail.
 				OuterCBSHeader = GI.getHeaderForTopLevelTail(BB);
 				OuterCBSTail = BB;
 				errs() << "TAIL DETECTED\n";
 				continue;
 			}
 
-		// Put all the condblocks once the outermost head of condblock sets
-		// is discovered.
+			// Put all the condblocks once the outermost head of condblock sets
+			// is discovered.
 			if(OuterCBSHeader == BB) {
-			// Add all the condblock sets to post-order list now
+				// Add all the condblock sets to post-order list now
 				AddPostOrderedBlocks(OuterCBSTail);
 
-			// Reset pointers for other condblock sets
+				// Reset pointers for other condblock sets
 				OuterCBSHeader = OuterCBSTail = nullptr;
 			}
 		}
@@ -165,18 +165,18 @@ FlowAwarePostOrderVect(const GraphNodeT &G, const GenInfoT &GI) {
 
 // A wrapper function for templated function
 std::vector<BasicBlock *> FlowAwarePostOrder(const DomTreeNodeBase<BasicBlock> *G,
-											 const GenCondBlockSetLoopInfo &GI) {
+		const GenCondBlockSetLoopInfo &GI) {
 	return FlowAwarePostOrderVect<BasicBlock, DomTreeNodeBase<BasicBlock> *,
-							  GenCondBlockSetLoopInfo>(
-								const_cast<DomTreeNodeBase<BasicBlock> *>(G), GI);
+	GenCondBlockSetLoopInfo>(
+			const_cast<DomTreeNodeBase<BasicBlock> *>(G), GI);
 }
 
 // A wrapper function for pre-order
 std::vector<BasicBlock *> FlowAwarePreOrder(const DomTreeNodeBase<BasicBlock> *G,
-		 	 	 	 	 	 	 	 	 	const GenCondBlockSetLoopInfo &GI) {
+		const GenCondBlockSetLoopInfo &GI) {
 	std::vector<BasicBlock *> PO =
-			FlowAwarePostOrderVect<BasicBlock, DomTreeNodeBase<BasicBlock> *,
-			GenCondBlockSetLoopInfo>(const_cast<DomTreeNodeBase<BasicBlock> *>(G), GI);
+		FlowAwarePostOrderVect<BasicBlock, DomTreeNodeBase<BasicBlock> *,
+	GenCondBlockSetLoopInfo>(const_cast<DomTreeNodeBase<BasicBlock> *>(G), GI);
 	std::reverse(PO.begin(), PO.end());
 	return PO;
 }

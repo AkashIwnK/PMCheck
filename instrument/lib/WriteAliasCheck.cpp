@@ -17,11 +17,12 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 
 #include "WriteAliasCheck.h"
+#include "DataStructure.h"
 
 using namespace llvm;
 
 static bool WriteAliasCheck(const MemoryLocation &LocA,
-														const MemoryLocation &LocB, AAResults &AA) {
+		const MemoryLocation &LocB, AAResults &AA) {
 	auto Res = AA.alias(LocA, LocB);
 	if(Res == AliasResult::MayAlias || Res == AliasResult::NoAlias) {
 		errs() << "NO OR MAY ALIAS\n";
@@ -35,13 +36,13 @@ static bool WriteAliasCheck(const MemoryLocation &LocA,
 }
 
 static bool WriteAliasCheck(const MemoryLocation &WriteLoc,
-												    SmallVector<Value *, 16> &StackAndGlobalVarVect,
-												    AAResults &AA) {
+		SmallVector<Value *, 16> &StackAndGlobalVarVect,
+		AAResults &AA) {
 	for(auto *Val : StackAndGlobalVarVect) {
 		Val->print(errs());
 		errs() << "\n";
 		if(AllocaInst *AI = dyn_cast<AllocaInst>(Val)) {
-		// Check alias with a local variable
+			// Check alias with a local variable
 			const auto &DL = AI->getModule()->getDataLayout();
 			errs() << "GOT DATA LAYOUT\n";
 			uint64_t Size = DL.getTypeAllocSizeInBits(AI->getAllocatedType());
@@ -57,7 +58,7 @@ static bool WriteAliasCheck(const MemoryLocation &WriteLoc,
 				return true;
 			continue;
 		} else if(GlobalVariable *GV = dyn_cast<GlobalVariable>(Val)) {
-		// Check alias with a global variable
+			// Check alias with a global variable
 			const auto &DL = GV->getParent()->getDataLayout();
 			uint64_t Size = DL.getTypeAllocSizeInBits(GV->getValueType());
 			const MemoryLocation ValLoc = MemoryLocation(GV, LocationSize(Size));
@@ -70,7 +71,7 @@ static bool WriteAliasCheck(const MemoryLocation &WriteLoc,
 }
 
 bool WriteAliases(StoreInst *SI, SmallVector<Value *, 16> &StackAndGlobalVarVect,
-		   	   	   		AAResults &AA) {
+		AAResults &AA) {
 	errs() << "WRITE: ";
 	SI->print(errs());
 	errs() << "\n";
@@ -79,24 +80,24 @@ bool WriteAliases(StoreInst *SI, SmallVector<Value *, 16> &StackAndGlobalVarVect
 }
 
 bool WriteAliases(CallInst *CI, SmallVector<Value *, 16> &StackAndGlobalVarVect,
-		   	   	   		AAResults &AA) {
+		AAResults &AA) {
 	errs() << "WRITE: ";
 	CI->print(errs());
 	errs() << "\n";
 
-// Deal with memory intrinsics
+	// Deal with memory intrinsics
 	if(auto *MemInst = dyn_cast<AnyMemIntrinsic>(CI)) {
 		const MemoryLocation WriteLoc = MemoryLocation::getForDest(MemInst);
 		return WriteAliasCheck(WriteLoc, StackAndGlobalVarVect, AA);
 	}
 
-// Deal with memory library function calls
+	// Deal with memory library function calls
 	auto Size = LocationSize::unknown();
 	if(CI->getCalledFunction()->getFunctionType()->getNumParams() >= 3) {
 		if(ConstantInt *C = dyn_cast<ConstantInt>(CI->getArgOperand(2)))
 			Size = LocationSize::precise(C->getValue().getZExtValue());
 	} else {
-	// The number of parameters is 2 and we do not know the size.
+		// The number of parameters is 2 and we do not know the size.
 	}
 	AAMDNodes AATags;
 	CI->getAAMetadata(AATags);
